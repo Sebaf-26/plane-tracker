@@ -24,6 +24,7 @@ services:
       TAR1090_MESSAGERATEINTITLE: "true"
     volumes:
       - ultrafeeder_data:/opt/adsb
+      - /dev/bus/usb:/dev/bus/usb
     tmpfs:
       - /run:exec,size=64M
       - /tmp:size=128M
