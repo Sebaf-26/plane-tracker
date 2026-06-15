@@ -6,7 +6,7 @@ services:
     device_cgroup_rules:
       - "c 189:* rwm"
     ports:
-      - "8080:80"
+      - "${WEB_PORT:-8080}:80"
       - "30003:30003"
       - "30104:30104"
     environment:

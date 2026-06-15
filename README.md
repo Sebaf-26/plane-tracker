@@ -8,7 +8,7 @@ Richiede una chiavetta **RTL-SDR** collegata all'host.
 
 | Porta | Servizio |
 |-------|----------|
-| 8080  | Interfaccia web tar1090 (radar) |
+| `WEB_PORT` (default 8080) | Interfaccia web tar1090 (radar) |
 | 30003 | SBS output |
 | 30104 | Beast input |
 
@@ -31,6 +31,7 @@ Nella sezione **Environment variables** di Portainer aggiungi:
 | `READSB_LAT` | Latitudine del receiver | `45.4642` |
 | `READSB_LON` | Longitudine del receiver | `9.1900` |
 | `READSB_ALT` | Altitudine del receiver | `120m` |
+| `WEB_PORT` | Porta host per il radar web (opzionale, default `8080`) | `8090` |
 | `TZ` | Timezone (opzionale, default `Europe/Rome`) | `Europe/Rome` |
 | `READSB_GAIN` | Guadagno SDR (opzionale, default `autogain`) | `autogain` |
 
