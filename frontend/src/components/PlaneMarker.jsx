@@ -38,7 +38,7 @@ function makeIcon(track, selected) {
   })
 }
 
-export default function PlaneMarker({ plane, selected, onClick }) {
+export default function PlaneMarker({ plane, selected }) {
   const callsign = plane.flight?.trim() || plane.hex.toUpperCase()
   const icon = makeIcon(plane.track, selected)
 
@@ -46,7 +46,6 @@ export default function PlaneMarker({ plane, selected, onClick }) {
     <Marker
       position={[plane.lat, plane.lon]}
       icon={icon}
-      eventHandlers={{ click: () => onClick(plane.hex) }}
       zIndexOffset={selected ? 1000 : 0}
     >
       <Popup>
