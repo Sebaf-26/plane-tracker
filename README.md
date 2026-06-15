@@ -1,6 +1,6 @@
 # plane-tracker
 
-Stack Docker per ricevitore ADS-B basato su [docker-adsb-ultrafeeder](https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder), pensato per il deploy su **Portainer** tramite Git stack.
+Stack Docker per ricevitore ADS-B con interfaccia radar React, basato su [docker-adsb-ultrafeeder](https://github.com/sdr-enthusiasts/docker-adsb-ultrafeeder).
 
 Richiede una chiavetta **RTL-SDR** collegata all'host.
 
@@ -8,7 +8,7 @@ Richiede una chiavetta **RTL-SDR** collegata all'host.
 
 | Porta | Servizio |
 |-------|----------|
-| `WEB_PORT` (default 8080) | Interfaccia web tar1090 (radar) |
+| `UI_PORT` (default `8090`) | Radar React |
 | 30003 | SBS output |
 | 30104 | Beast input |
 
@@ -22,16 +22,14 @@ In Portainer → **Stacks** → **Add stack** → scegli **Repository**.
 - Branch: `main`
 - Compose path: `docker-compose.yml`
 
-### 2. Configura le variabili d'ambiente
-
-Nella sezione **Environment variables** di Portainer aggiungi:
+### 2. Variabili d'ambiente
 
 | Variabile | Descrizione | Esempio |
 |-----------|-------------|---------|
-| `READSB_LAT` | Latitudine del receiver | `45.4642` |
-| `READSB_LON` | Longitudine del receiver | `9.1900` |
-| `READSB_ALT` | Altitudine del receiver | `120m` |
-| `WEB_PORT` | Porta host per il radar web (opzionale, default `8080`) | `8090` |
+| `READSB_LAT` | Latitudine del receiver | `43.929663` |
+| `READSB_LON` | Longitudine del receiver | `10.203978` |
+| `READSB_ALT` | Altitudine del receiver | `50m` |
+| `UI_PORT` | Porta per il radar React (opzionale, default `8090`) | `8090` |
 | `TZ` | Timezone (opzionale, default `Europe/Rome`) | `Europe/Rome` |
 | `READSB_GAIN` | Guadagno SDR (opzionale, default `autogain`) | `autogain` |
 
@@ -39,8 +37,8 @@ Nella sezione **Environment variables** di Portainer aggiungi:
 
 ### 3. Deploy
 
-Clicca **Deploy the stack**. L'interfaccia radar sarà disponibile su `http://<ip-host>:8080`.
+Clicca **Deploy the stack**. Il frontend si builda al primo avvio (~2 min), poi l'interfaccia radar è su `http://<ip-host>:<UI_PORT>`.
 
 ## Accesso dispositivo USB
 
-Ultrafeeder deve poter accedere alla chiavetta RTL-SDR. La regola `device_cgroup_rules: c 189:* rwm` è già inclusa nel compose. Assicurati che Portainer/Docker giri su un host con la chiavetta collegata.
+La regola `device_cgroup_rules: c 189:* rwm` è già inclusa nel compose. Assicurati che il device `/dev/bus/usb` sia passato all'LXC da Proxmox.
