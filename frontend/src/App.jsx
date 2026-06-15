@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import { usePlanes } from './usePlanes'
 import PlaneMarker from './components/PlaneMarker'
 import FlightList from './components/FlightList'
+import { formatAlt, formatSpeed, haversineKm, formatDist } from './utils'
 
 const RECEIVER_LAT = import.meta.env.VITE_LAT ? parseFloat(import.meta.env.VITE_LAT) : 43.9
 const RECEIVER_LON = import.meta.env.VITE_LON ? parseFloat(import.meta.env.VITE_LON) : 10.2
@@ -13,20 +14,18 @@ function FlyTo({ plane }) {
   const prev = useRef(null)
   useEffect(() => {
     if (plane && plane.hex !== prev.current) {
-      map.flyTo([plane.lat, plane.lon], Math.max(map.getZoom(), 9), { duration: 0.8 })
+      map.flyTo([plane.lat, plane.lon], Math.max(map.getZoom(), 9), { duration: 0.6 })
       prev.current = plane.hex
     }
   }, [plane, map])
   return null
 }
 
-function ScanLine() {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1000,
-      background: 'repeating-linear-gradient(to bottom, transparent 0px, transparent 3px, rgba(0,255,65,0.012) 3px, rgba(0,255,65,0.012) 4px)',
-    }} />
-  )
+const glass = {
+  background: 'rgba(28,28,30,0.82)',
+  backdropFilter: 'blur(20px)',
+  WebkitBackdropFilter: 'blur(20px)',
+  border: '1px solid rgba(255,255,255,0.09)',
 }
 
 export default function App() {
@@ -39,40 +38,42 @@ export default function App() {
     setSelectedHex((prev) => (prev === hex ? null : hex))
   }
 
-  const timeStr = lastUpdate
-    ? lastUpdate.toLocaleTimeString('it-IT', { hour12: false })
-    : '--:--:--'
+  const timeStr = lastUpdate?.toLocaleTimeString('it-IT', { hour12: false }) ?? '--:--:--'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg)' }}>
 
-      {/* Header */}
+      {/* Titlebar */}
       <header style={{
+        ...glass,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '6px 16px', borderBottom: '1px solid var(--green-border)',
-        background: 'var(--bg-panel)', flexShrink: 0,
+        padding: '0 20px', height: 52, flexShrink: 0,
+        borderLeft: 'none', borderRight: 'none', borderTop: 'none',
+        zIndex: 10,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 18, letterSpacing: 3, color: 'var(--green)' }}>✈ HYDRAPLANES</span>
-          <span style={{ fontSize: 11, color: 'var(--green-dim)', letterSpacing: 1 }}>ADS-B RADAR</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 20 }}>✈</span>
+          <span style={{ fontSize: 15, fontWeight: 600, letterSpacing: -0.3 }}>HydraPlanes</span>
+          <span style={{
+            fontSize: 11, color: 'var(--text2)', background: 'var(--bg3)',
+            padding: '2px 8px', borderRadius: 20, marginLeft: 2,
+          }}>ADS-B</span>
         </div>
-        <div style={{ display: 'flex', gap: 20, fontSize: 12, alignItems: 'center' }}>
-          <span>
-            <span style={{ color: 'var(--green-dim)' }}>CONTACTS </span>
-            <span style={{ color: error ? 'var(--red)' : 'var(--green)' }}>
-              {error ? 'ERR' : planes.length}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: 13 }}>
+          <span style={{ color: 'var(--text2)' }}>
+            <span style={{ color: error ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
+              {error ? '!' : planes.length}
             </span>
+            {' '}aircraft
           </span>
-          <span>
-            <span style={{ color: 'var(--green-dim)' }}>UPD </span>
-            <span>{timeStr}</span>
-          </span>
+          <span style={{ color: 'var(--text3)', fontSize: 12 }}>{timeStr}</span>
           <div style={{
             width: 8, height: 8, borderRadius: '50%',
             background: error ? 'var(--red)' : 'var(--green)',
-            boxShadow: error ? '0 0 6px var(--red)' : '0 0 6px var(--green)',
-            animation: error ? 'none' : 'blink 2s infinite',
-          }} />
+            boxShadow: `0 0 8px ${error ? 'var(--red)' : 'var(--green)'}`,
+            animation: error ? 'none' : 'pulse 2s infinite',
+          }}/>
         </div>
       </header>
 
@@ -80,13 +81,12 @@ export default function App() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
         {/* Map */}
-        <div style={{ position: 'relative', flex: 1 }}>
-          <ScanLine />
+        <div style={{ flex: 1, position: 'relative' }}>
           <MapContainer
             center={[RECEIVER_LAT, RECEIVER_LON]}
             zoom={8}
             style={{ height: '100%', width: '100%' }}
-            zoomControl={false}
+            zoomControl={true}
           >
             <TileLayer
               url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -107,49 +107,70 @@ export default function App() {
 
         {/* Sidebar */}
         <aside style={{
-          width: 320, display: 'flex', flexDirection: 'column',
-          background: 'var(--bg-panel)', borderLeft: '1px solid var(--green-border)',
-          overflow: 'hidden', flexShrink: 0,
+          ...glass,
+          width: 300,
+          display: 'flex',
+          flexDirection: 'column',
+          borderTop: 'none',
+          borderBottom: 'none',
+          borderRight: 'none',
+          overflow: 'hidden',
+          flexShrink: 0,
+          zIndex: 5,
         }}>
-          <div style={{
-            padding: '8px 10px', fontSize: 11, letterSpacing: 2,
-            color: 'var(--green-dim)', borderBottom: '1px solid var(--green-border)',
-            flexShrink: 0,
-          }}>
-            FLIGHT LIST
-          </div>
 
-          {/* Selected detail */}
-          {selectedPlane && (
+          {/* Selected aircraft detail */}
+          {selectedPlane ? (
             <div style={{
-              padding: '10px 12px', borderBottom: '1px solid var(--green-border)',
-              background: '#0a1f0a', fontSize: 12, flexShrink: 0,
+              padding: 16,
+              borderBottom: '1px solid var(--border)',
+              flexShrink: 0,
             }}>
-              <div style={{ color: 'var(--yellow)', fontSize: 14, marginBottom: 6 }}>
-                ✈ {selectedPlane.flight?.trim() || selectedPlane.hex.toUpperCase()}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                <div>
+                  <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5 }}>
+                    {selectedPlane.flight?.trim() || selectedPlane.hex.toUpperCase()}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>
+                    {selectedPlane.hex.toUpperCase()}
+                    {selectedPlane.squawk ? ` · SQK ${selectedPlane.squawk}` : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedHex(null)}
+                  style={{
+                    background: 'var(--bg3)', border: 'none', borderRadius: 20,
+                    color: 'var(--text2)', width: 26, height: 26, cursor: 'pointer',
+                    fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >×</button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '3px 0', color: 'var(--green)' }}>
-                <span style={{ color: 'var(--green-dim)' }}>HEX</span>
-                <span>{selectedPlane.hex.toUpperCase()}</span>
-                {selectedPlane.squawk && <><span style={{ color: 'var(--green-dim)' }}>SQK</span><span>{selectedPlane.squawk}</span></>}
-                <span style={{ color: 'var(--green-dim)' }}>ALT</span>
-                <span>{selectedPlane.alt_baro === 'ground' ? 'GROUND' : selectedPlane.alt_baro != null ? `${Math.round(selectedPlane.alt_baro).toLocaleString()} ft` : '---'}</span>
-                <span style={{ color: 'var(--green-dim)' }}>SPD</span>
-                <span>{selectedPlane.gs != null ? `${Math.round(selectedPlane.gs)} kt` : '---'}</span>
-                <span style={{ color: 'var(--green-dim)' }}>HDG</span>
-                <span>{selectedPlane.track != null ? `${Math.round(selectedPlane.track)}°` : '---'}</span>
-                {selectedPlane.category && <><span style={{ color: 'var(--green-dim)' }}>CAT</span><span>{selectedPlane.category}</span></>}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                {[
+                  { label: 'Altitude', value: formatAlt(selectedPlane.alt_baro) },
+                  { label: 'Speed', value: formatSpeed(selectedPlane.gs) },
+                  { label: 'Heading', value: selectedPlane.track != null ? `${Math.round(selectedPlane.track)}°` : '—' },
+                  { label: 'Distance', value: formatDist(haversineKm(RECEIVER_LAT, RECEIVER_LON, selectedPlane.lat, selectedPlane.lon)) },
+                  { label: 'Lat', value: selectedPlane.lat.toFixed(3) },
+                  { label: 'Lon', value: selectedPlane.lon.toFixed(3) },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{
+                    background: 'var(--bg3)', borderRadius: 'var(--radius-sm)',
+                    padding: '8px 10px',
+                  }}>
+                    <div style={{ fontSize: 10, color: 'var(--text2)', marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{value}</div>
+                  </div>
+                ))}
               </div>
-              <button
-                onClick={() => setSelectedHex(null)}
-                style={{
-                  marginTop: 8, background: 'transparent', border: '1px solid var(--green-border)',
-                  color: 'var(--green-dim)', fontFamily: 'var(--font)', fontSize: 11,
-                  padding: '2px 8px', cursor: 'pointer', letterSpacing: 1,
-                }}
-              >
-                CLEAR
-              </button>
+            </div>
+          ) : (
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Flights</div>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 2 }}>
+                {planes.length} aircraft in range
+              </div>
             </div>
           )}
 
@@ -164,9 +185,9 @@ export default function App() {
       </div>
 
       <style>{`
-        @keyframes blink {
+        @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
+          50% { opacity: 0.4; }
         }
       `}</style>
     </div>

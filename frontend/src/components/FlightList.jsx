@@ -1,7 +1,5 @@
 import { formatAlt, formatSpeed, formatDist, haversineKm } from '../utils'
 
-const COL = { color: 'var(--green-dim)', fontSize: 10, marginBottom: 4 }
-
 export default function FlightList({ planes, selected, onSelect, receiverLat, receiverLon }) {
   const sorted = [...planes].sort((a, b) => {
     const da = haversineKm(receiverLat, receiverLon, a.lat, a.lon)
@@ -10,51 +8,66 @@ export default function FlightList({ planes, selected, onSelect, receiverLat, re
   })
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ ...COL, display: 'grid', gridTemplateColumns: '5fr 3fr 3fr 3fr', padding: '0 8px 4px', borderBottom: '1px solid var(--green-border)', marginBottom: 0 }}>
-        <span>CALLSIGN</span>
-        <span>ALT</span>
-        <span>SPD</span>
-        <span>DIST</span>
-      </div>
+    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
+      {sorted.length === 0 && (
+        <div style={{ color: 'var(--text3)', textAlign: 'center', padding: 32, fontSize: 14 }}>
+          No aircraft detected
+        </div>
+      )}
+      {sorted.map((p) => {
+        const callsign = p.flight?.trim() || p.hex.toUpperCase()
+        const dist = haversineKm(receiverLat, receiverLon, p.lat, p.lon)
+        const isSelected = p.hex === selected
+        const onGround = p.alt_baro === 'ground' || p.alt_baro === 0
 
-      <div style={{ overflowY: 'auto', flex: 1 }}>
-        {sorted.length === 0 && (
-          <div style={{ color: 'var(--green-dim)', padding: 16, textAlign: 'center', fontSize: 12 }}>
-            NO AIRCRAFT DETECTED
-          </div>
-        )}
-        {sorted.map((p) => {
-          const callsign = p.flight?.trim() || p.hex.toUpperCase()
-          const dist = haversineKm(receiverLat, receiverLon, p.lat, p.lon)
-          const isSelected = p.hex === selected
-          return (
-            <div
-              key={p.hex}
-              onClick={() => onSelect(p.hex)}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '5fr 3fr 3fr 3fr',
-                padding: '5px 8px',
-                cursor: 'pointer',
-                fontSize: 12,
-                borderBottom: '1px solid #0a1a0a',
-                background: isSelected ? '#0a2a0a' : 'transparent',
-                color: isSelected ? 'var(--yellow)' : 'var(--green)',
-                borderLeft: isSelected ? '2px solid var(--yellow)' : '2px solid transparent',
-                transition: 'background 0.15s',
-              }}
-            >
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {callsign}
-              </span>
-              <span>{formatAlt(p.alt_baro)}</span>
-              <span>{formatSpeed(p.gs)}</span>
-              <span>{formatDist(dist)}</span>
+        return (
+          <div
+            key={p.hex}
+            onClick={() => onSelect(p.hex)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '10px 16px',
+              cursor: 'pointer',
+              background: isSelected ? 'var(--blue-dim)' : 'transparent',
+              borderLeft: isSelected ? '2px solid var(--blue)' : '2px solid transparent',
+              transition: 'background 0.15s',
+            }}
+          >
+            {/* Icon */}
+            <div style={{
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              background: isSelected ? 'rgba(10,132,255,0.15)' : 'var(--bg3)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16,
+              transform: `rotate(${p.track ?? 0}deg)`,
+              color: onGround ? 'var(--text3)' : isSelected ? 'var(--blue)' : 'var(--green)',
+            }}>
+              ✈
             </div>
-          )
-        })}
-      </div>
+
+            {/* Main info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 14, fontWeight: 600,
+                color: isSelected ? 'var(--blue)' : 'var(--text)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {callsign}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginTop: 1 }}>
+                {formatAlt(p.alt_baro)} · {formatSpeed(p.gs)}
+              </div>
+            </div>
+
+            {/* Distance */}
+            <div style={{ fontSize: 12, color: 'var(--text2)', flexShrink: 0 }}>
+              {formatDist(dist)}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
