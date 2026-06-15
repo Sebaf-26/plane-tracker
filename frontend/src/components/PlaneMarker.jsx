@@ -1,6 +1,7 @@
 import { Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub } from '../utils'
+import { squawkInfo } from '../squawk'
 
 function makeIcon(track, selected) {
   const angle = track ?? 0
@@ -56,7 +57,13 @@ export default function PlaneMarker({ plane, selected, onClick }) {
               ['Altitude', formatAlt(plane.alt_baro), formatAltSub(plane.alt_baro)],
               ['Speed',    formatSpeed(plane.gs),     formatSpeedSub(plane.gs)],
               ['Heading',  plane.track != null ? `${Math.round(plane.track)}°` : '—', null],
-              ['Squawk',   plane.squawk ?? '—', null],
+              ['Squawk', (() => {
+                if (!plane.squawk) return '—'
+                const info = squawkInfo(plane.squawk)
+                return info
+                  ? <span style={{ color: info.color }}>{plane.squawk} — {info.label}</span>
+                  : plane.squawk
+              })(), null],
             ].map(([k, v, sub]) => (
               <><span style={{ color: 'var(--text3)' }}>{k}</span>
               <span style={{ textAlign: 'right', fontWeight: 600 }}>

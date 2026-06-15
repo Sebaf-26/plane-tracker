@@ -6,6 +6,7 @@ import PlaneMarker from './components/PlaneMarker'
 import FlightList from './components/FlightList'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub, haversineKm, formatDist } from './utils'
 import Compass from './components/Compass'
+import { squawkInfo } from './squawk'
 
 const RECEIVER_LAT = import.meta.env.VITE_LAT ? parseFloat(import.meta.env.VITE_LAT) : 43.9
 const RECEIVER_LON = import.meta.env.VITE_LON ? parseFloat(import.meta.env.VITE_LON) : 10.2
@@ -121,7 +122,14 @@ export default function App() {
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 3 }}>
                   {selectedPlane.hex.toUpperCase()}
-                  {selectedPlane.squawk ? ` · SQK ${selectedPlane.squawk}` : ''}
+                  {selectedPlane.squawk && (() => {
+                    const info = squawkInfo(selectedPlane.squawk)
+                    return info
+                      ? <span style={{ color: info.color, fontFamily: 'var(--font)', fontWeight: 600, marginLeft: 6 }}>
+                          {info.icon ? `${info.icon} ` : ''}{info.label}
+                        </span>
+                      : <span style={{ marginLeft: 6 }}>SQK {selectedPlane.squawk}</span>
+                  })()}
                 </div>
               </div>
               <button onClick={() => setSelectedHex(null)} style={{
