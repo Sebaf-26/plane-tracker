@@ -4,7 +4,8 @@ import 'leaflet/dist/leaflet.css'
 import { usePlanes } from './usePlanes'
 import PlaneMarker from './components/PlaneMarker'
 import FlightList from './components/FlightList'
-import { formatAlt, formatSpeed, haversineKm, formatDist } from './utils'
+import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub, haversineKm, formatDist } from './utils'
+import Compass from './components/Compass'
 
 const RECEIVER_LAT = import.meta.env.VITE_LAT ? parseFloat(import.meta.env.VITE_LAT) : 43.9
 const RECEIVER_LON = import.meta.env.VITE_LON ? parseFloat(import.meta.env.VITE_LON) : 10.2
@@ -130,14 +131,36 @@ export default function App() {
               }}>×</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            {/* Top row: altitude + speed + compass */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'start' }}>
+              {/* Altitude */}
+              <div style={{ ...cardInner, padding: '10px 12px' }}>
+                <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>Altitude</div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{formatAlt(selectedPlane.alt_baro)}</div>
+                {formatAltSub(selectedPlane.alt_baro) && (
+                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>{formatAltSub(selectedPlane.alt_baro)}</div>
+                )}
+              </div>
+              {/* Speed */}
+              <div style={{ ...cardInner, padding: '10px 12px' }}>
+                <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>Speed</div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{formatSpeed(selectedPlane.gs)}</div>
+                {formatSpeedSub(selectedPlane.gs) && (
+                  <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 2 }}>{formatSpeedSub(selectedPlane.gs)}</div>
+                )}
+              </div>
+              {/* Compass */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <Compass heading={selectedPlane.track} size={76} />
+              </div>
+            </div>
+
+            {/* Bottom row: distance + coords */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
               {[
-                ['Altitude',  formatAlt(selectedPlane.alt_baro)],
-                ['Speed',     formatSpeed(selectedPlane.gs)],
-                ['Heading',   selectedPlane.track != null ? `${Math.round(selectedPlane.track)}°` : '—'],
-                ['Distance',  formatDist(haversineKm(RECEIVER_LAT, RECEIVER_LON, selectedPlane.lat, selectedPlane.lon))],
-                ['Lat',       selectedPlane.lat.toFixed(3)],
-                ['Lon',       selectedPlane.lon.toFixed(3)],
+                ['Distance', formatDist(haversineKm(RECEIVER_LAT, RECEIVER_LON, selectedPlane.lat, selectedPlane.lon))],
+                ['Lat',      selectedPlane.lat.toFixed(4)],
+                ['Lon',      selectedPlane.lon.toFixed(4)],
               ].map(([label, value]) => (
                 <div key={label} style={{ ...cardInner, padding: '10px 12px' }}>
                   <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>

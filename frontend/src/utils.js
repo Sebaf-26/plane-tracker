@@ -15,9 +15,20 @@ export function formatAlt(alt) {
   return `${Math.round(alt).toLocaleString()} ft`
 }
 
+export function formatAltSub(alt) {
+  if (alt == null || alt === 'ground') return null
+  const m = Math.round(alt * 0.3048)
+  return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`
+}
+
 export function formatSpeed(gs) {
   if (gs == null) return '---'
   return `${Math.round(gs)} kt`
+}
+
+export function formatSpeedSub(gs) {
+  if (gs == null) return null
+  return `${Math.round(gs * 1.852)} km/h`
 }
 
 export function formatDist(km) {
