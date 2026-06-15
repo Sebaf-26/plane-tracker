@@ -5,26 +5,29 @@ import { formatAlt, formatSpeed } from '../utils'
 function makeIcon(track, selected, onGround) {
   const angle = track ?? 0
   const color = selected ? '#0a84ff' : onGround ? '#636366' : '#30d158'
-  const shadow = selected ? 'rgba(10,132,255,0.5)' : onGround ? 'transparent' : 'rgba(48,209,88,0.4)'
-  const size = selected ? 32 : 26
+  const glow = selected ? 'rgba(10,132,255,0.6)' : onGround ? 'transparent' : 'rgba(48,209,88,0.5)'
+  const size = selected ? 36 : 28
 
+  // Top-down aircraft silhouette: fuselage + swept wings + tail
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="${size}" height="${size}">
-      <defs>
-        <filter id="glow">
-          <feGaussianBlur stdDeviation="2" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-      </defs>
-      <g transform="rotate(${angle}, 16, 16)" filter="url(#glow)">
-        <polygon points="16,3 19,13 28,13 28,15 19,15 21,26 24,26 24,28 16,25 8,28 8,26 11,26 13,15 4,15 4,13 13,13"
-          fill="${color}"/>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="${size}" height="${size}">
+      <g transform="rotate(${angle}, 20, 20)">
+        <!-- fuselage -->
+        <ellipse cx="20" cy="20" rx="2.5" ry="13" fill="${color}" opacity="0.95"/>
+        <!-- nose -->
+        <ellipse cx="20" cy="8" rx="2" ry="3" fill="${color}"/>
+        <!-- main wings -->
+        <path d="M20,16 C17,16 8,20 4,24 L6,25 C10,22 17,19 20,19 C23,19 30,22 34,25 L36,24 C32,20 23,16 20,16Z"
+              fill="${color}" opacity="0.9"/>
+        <!-- tail fins -->
+        <path d="M20,29 C18.5,29 15,31 14,33 L15.5,33.5 C17,32 19,31 20,31 C21,31 23,32 24.5,33.5 L26,33 C25,31 21.5,29 20,29Z"
+              fill="${color}" opacity="0.85"/>
       </g>
     </svg>`
 
   const half = size / 2
   return L.divIcon({
-    html: `<div style="filter:drop-shadow(0 0 6px ${shadow})">${svg}</div>`,
+    html: `<div style="filter:drop-shadow(0 0 5px ${glow}) drop-shadow(0 1px 3px rgba(0,0,0,0.8))">${svg}</div>`,
     className: '',
     iconSize: [size, size],
     iconAnchor: [half, half],
