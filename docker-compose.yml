@@ -29,5 +29,18 @@ services:
       - /run:exec,size=64M
       - /tmp:size=128M
 
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_LAT: ${READSB_LAT}
+        VITE_LON: ${READSB_LON}
+    container_name: hydraplanes-frontend
+    restart: unless-stopped
+    ports:
+      - "${UI_PORT:-8090}:80"
+    depends_on:
+      - ultrafeeder
+
 volumes:
   ultrafeeder_data:

@@ -1,0 +1,38 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green: #00ff41;
+  --green-dim: #00aa2b;
+  --green-dark: #003d10;
+  --green-border: #0f5c1e;
+  --bg: #050d05;
+  --bg-panel: #080f08;
+  --yellow: #ffd700;
+  --red: #ff4444;
+  --font: 'Share Tech Mono', 'Courier New', monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--green);
+  font-family: var(--font);
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--green-border); }
+
+.leaflet-container { background: #000 !important; }
+.leaflet-popup-content-wrapper {
+  background: var(--bg-panel) !important;
+  border: 1px solid var(--green-border) !important;
+  border-radius: 2px !important;
+  color: var(--green) !important;
+  font-family: var(--font) !important;
+  font-size: 12px !important;
+}
+.leaflet-popup-tip { background: var(--bg-panel) !important; }
+.leaflet-popup-close-button { color: var(--green-dim) !important; }
