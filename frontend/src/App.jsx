@@ -3,10 +3,12 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { usePlanes } from './usePlanes'
 import PlaneMarker from './components/PlaneMarker'
+import TrailLine from './components/TrailLine'
 import FlightList from './components/FlightList'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub, haversineKm, formatDist } from './utils'
 import Compass from './components/Compass'
 import { squawkInfo } from './squawk'
+import { useTrails } from './useTrails'
 
 const RECEIVER_LAT = import.meta.env.VITE_LAT ? parseFloat(import.meta.env.VITE_LAT) : 43.9
 const RECEIVER_LON = import.meta.env.VITE_LON ? parseFloat(import.meta.env.VITE_LON) : 10.2
@@ -159,6 +161,14 @@ function FullDetail({ plane, onClose }) {
 export default function App() {
   const { planes, lastUpdate, error } = usePlanes()
   const [selectedHex, setSelectedHex] = useState(null)
+  const { update: updateTrails, trails } = useTrails()
+  const [trailSnapshot, setTrailSnapshot] = useState({})
+
+  useEffect(() => {
+    if (planes.length === 0) return
+    updateTrails(planes)
+    setTrailSnapshot({ ...trails.current })
+  }, [planes])
 
   const selectedPlane = planes.find((p) => p.hex === selectedHex) ?? null
 
@@ -179,6 +189,13 @@ export default function App() {
             attribution='&copy; <a href="https://carto.com">CARTO</a>'
             maxZoom={19}
           />
+          {planes.map((p) => (
+            <TrailLine
+              key={`trail-${p.hex}`}
+              points={trailSnapshot[p.hex]}
+              selected={p.hex === selectedHex}
+            />
+          ))}
           {planes.map((p) => (
             <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} />
           ))}
