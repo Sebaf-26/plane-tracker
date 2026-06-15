@@ -2,43 +2,44 @@ import { Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { formatAlt, formatSpeed } from '../utils'
 
-function makeIcon(track, selected, onGround) {
+function makeIcon(track, selected) {
   const angle = track ?? 0
-  const color = selected ? '#0a84ff' : onGround ? '#636366' : '#30d158'
-  const glow = selected ? 'rgba(10,132,255,0.6)' : onGround ? 'transparent' : 'rgba(48,209,88,0.5)'
-  const size = selected ? 36 : 28
+  const bg = selected ? '#fac123' : 'rgba(250,193,35,0.85)'
+  const size = selected ? 38 : 30
+  const fontSize = selected ? 14 : 11
 
-  // Top-down aircraft silhouette: fuselage + swept wings + tail
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="${size}" height="${size}">
-      <g transform="rotate(${angle}, 20, 20)">
-        <!-- fuselage -->
-        <ellipse cx="20" cy="20" rx="2.5" ry="13" fill="${color}" opacity="0.95"/>
-        <!-- nose -->
-        <ellipse cx="20" cy="8" rx="2" ry="3" fill="${color}"/>
-        <!-- main wings -->
-        <path d="M20,16 C17,16 8,20 4,24 L6,25 C10,22 17,19 20,19 C23,19 30,22 34,25 L36,24 C32,20 23,16 20,16Z"
-              fill="${color}" opacity="0.9"/>
-        <!-- tail fins -->
-        <path d="M20,29 C18.5,29 15,31 14,33 L15.5,33.5 C17,32 19,31 20,31 C21,31 23,32 24.5,33.5 L26,33 C25,31 21.5,29 20,29Z"
-              fill="${color}" opacity="0.85"/>
-      </g>
-    </svg>`
+    <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="
+        width:${size}px;height:${size}px;border-radius:50%;
+        background:${bg};
+        display:flex;align-items:center;justify-content:center;
+        box-shadow:0 2px 12px rgba(250,193,35,${selected ? 0.6 : 0.35}),0 1px 4px rgba(0,0,0,0.5);
+        transform:scale(1);
+        transition:all 0.2s;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${fontSize + 2}" height="${fontSize + 2}">
+          <g transform="rotate(${angle - 45}, 12, 12)">
+            <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"
+              fill="#000" opacity="0.85"/>
+          </g>
+        </svg>
+      </div>
+    </div>`
 
-  const half = size / 2
+  const w = Math.max(size, 60)
   return L.divIcon({
-    html: `<div style="filter:drop-shadow(0 0 5px ${glow}) drop-shadow(0 1px 3px rgba(0,0,0,0.8))">${svg}</div>`,
+    html: svg,
     className: '',
-    iconSize: [size, size],
-    iconAnchor: [half, half],
-    popupAnchor: [0, -half - 4],
+    iconSize: [w, size + 6],
+    iconAnchor: [w / 2, size / 2],
+    popupAnchor: [0, -size / 2 - 4],
   })
 }
 
 export default function PlaneMarker({ plane, selected, onClick }) {
-  const onGround = plane.alt_baro === 'ground' || plane.alt_baro === 0
-  const icon = makeIcon(plane.track, selected, onGround)
   const callsign = plane.flight?.trim() || plane.hex.toUpperCase()
+  const icon = makeIcon(plane.track, selected)
 
   return (
     <Marker
@@ -48,25 +49,21 @@ export default function PlaneMarker({ plane, selected, onClick }) {
       zIndexOffset={selected ? 1000 : 0}
     >
       <Popup>
-        <div style={{ padding: '4px 2px', minWidth: 160 }}>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 10, color: '#f5f5f7' }}>
-            {callsign}
+        <div style={{ padding: '4px 2px', minWidth: 170 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 10 }}>{callsign}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', rowGap: 8, fontSize: 13 }}>
+            {[
+              ['Altitude',  formatAlt(plane.alt_baro)],
+              ['Speed',     formatSpeed(plane.gs)],
+              ['Heading',   plane.track != null ? `${Math.round(plane.track)}°` : '—'],
+              ['Squawk',    plane.squawk ?? '—'],
+            ].map(([k, v]) => (
+              <><span style={{ color: 'var(--text3)' }}>{k}</span>
+              <span style={{ textAlign: 'right', fontWeight: 600 }}>{v}</span></>
+            ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 0', fontSize: 13 }}>
-            <span style={{ color: 'rgba(245,245,247,0.5)' }}>Altitude</span>
-            <span style={{ color: '#f5f5f7', textAlign: 'right' }}>{formatAlt(plane.alt_baro)}</span>
-            <span style={{ color: 'rgba(245,245,247,0.5)' }}>Speed</span>
-            <span style={{ color: '#f5f5f7', textAlign: 'right' }}>{formatSpeed(plane.gs)}</span>
-            {plane.track != null && <>
-              <span style={{ color: 'rgba(245,245,247,0.5)' }}>Heading</span>
-              <span style={{ color: '#f5f5f7', textAlign: 'right' }}>{Math.round(plane.track)}°</span>
-            </>}
-            {plane.squawk && <>
-              <span style={{ color: 'rgba(245,245,247,0.5)' }}>Squawk</span>
-              <span style={{ color: '#f5f5f7', textAlign: 'right' }}>{plane.squawk}</span>
-            </>}
-            <span style={{ color: 'rgba(245,245,247,0.5)' }}>Hex</span>
-            <span style={{ color: '#f5f5f7', textAlign: 'right', fontFamily: 'monospace', fontSize: 11 }}>{plane.hex.toUpperCase()}</span>
+          <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+            {plane.hex.toUpperCase()}
           </div>
         </div>
       </Popup>

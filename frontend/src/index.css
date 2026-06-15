@@ -1,30 +1,31 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --blue: #0a84ff;
-  --blue-dim: rgba(10, 132, 255, 0.15);
-  --bg: #111113;
-  --bg2: #1c1c1e;
-  --bg3: #2c2c2e;
-  --surface: rgba(28, 28, 30, 0.85);
-  --border: rgba(255,255,255,0.08);
-  --border-strong: rgba(255,255,255,0.14);
-  --text: #f5f5f7;
-  --text2: rgba(245,245,247,0.55);
-  --text3: rgba(245,245,247,0.3);
-  --green: #30d158;
-  --yellow: #ffd60a;
-  --red: #ff453a;
-  --radius: 14px;
-  --radius-sm: 8px;
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", sans-serif;
+  --accent: #fac123;
+  --accent-dim: rgba(250, 193, 35, 0.15);
+  --bg-from: #0d1420;
+  --bg-mid:  #051929;
+  --bg-to:   #122419;
+  --card:        rgba(255,255,255,0.08);
+  --card-border: rgba(255,255,255,0.12);
+  --card-inner:  rgba(0,0,0,0.18);
+  --text:   #ffffff;
+  --text2:  rgba(255,255,255,0.72);
+  --text3:  rgba(255,255,255,0.45);
+  --green:  #32d74b;
+  --red:    #ff453a;
+  --r-xl:   28px;
+  --r-lg:   20px;
+  --r-md:   16px;
+  --r-sm:   10px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", "Helvetica Neue", sans-serif;
   --font-mono: "SF Mono", ui-monospace, monospace;
 }
 
 html, body, #root {
   height: 100%; width: 100%;
   overflow: hidden;
-  background: var(--bg);
+  background: linear-gradient(135deg, var(--bg-from) 0%, var(--bg-mid) 50%, var(--bg-to) 100%);
   color: var(--text);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
@@ -32,36 +33,43 @@ html, body, #root {
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
 
-.leaflet-container { background: #0d0d0f !important; }
+/* Leaflet overrides */
+.leaflet-container { background: #0a1520 !important; }
+.leaflet-tile-pane { filter: brightness(0.85) saturate(0.7); }
 
 .leaflet-popup-content-wrapper {
-  background: rgba(28,28,30,0.96) !important;
-  backdrop-filter: blur(20px) !important;
-  border: 1px solid var(--border-strong) !important;
-  border-radius: var(--radius) !important;
+  background: rgba(13,20,32,0.96) !important;
+  backdrop-filter: blur(24px) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: var(--r-lg) !important;
   color: var(--text) !important;
   font-family: var(--font) !important;
-  font-size: 13px !important;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.6) !important;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.7) !important;
 }
 .leaflet-popup-tip-container { display: none; }
-.leaflet-popup-close-button {
-  color: var(--text2) !important;
-  font-size: 18px !important;
-  top: 10px !important;
-  right: 10px !important;
-}
+.leaflet-popup-close-button { color: var(--text3) !important; top: 12px !important; right: 12px !important; font-size: 18px !important; }
+
 .leaflet-control-zoom {
-  border: 1px solid var(--border) !important;
-  border-radius: var(--radius-sm) !important;
+  border: 1px solid var(--card-border) !important;
+  border-radius: var(--r-md) !important;
   overflow: hidden;
-  backdrop-filter: blur(20px);
+  margin: 16px !important;
 }
 .leaflet-control-zoom a {
-  background: var(--surface) !important;
+  background: rgba(13,20,32,0.85) !important;
+  backdrop-filter: blur(12px) !important;
   color: var(--text) !important;
-  border-bottom: 1px solid var(--border) !important;
+  border-bottom: 1px solid var(--card-border) !important;
+  width: 32px !important; height: 32px !important;
+  line-height: 32px !important;
 }
-.leaflet-control-zoom a:hover { background: var(--bg3) !important; }
+.leaflet-control-zoom a:hover { background: rgba(255,255,255,0.08) !important; }
+.leaflet-attribution-flag { display: none !important; }
+.leaflet-control-attribution {
+  background: rgba(0,0,0,0.4) !important;
+  color: var(--text3) !important;
+  font-size: 10px !important;
+  border-radius: 6px !important;
+}
