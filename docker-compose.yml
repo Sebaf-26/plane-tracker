@@ -1,0 +1,32 @@
+services:
+  ultrafeeder:
+    image: ghcr.io/sdr-enthusiasts/docker-adsb-ultrafeeder:latest
+    container_name: hydraplanes-ultrafeeder
+    restart: unless-stopped
+    device_cgroup_rules:
+      - "c 189:* rwm"
+    ports:
+      - "8080:80"
+      - "30003:30003"
+      - "30104:30104"
+    environment:
+      LOGLEVEL: error
+      TZ: ${TZ:-Europe/Rome}
+      READSB_DEVICE_TYPE: rtlsdr
+      READSB_RTLSDR_DEVICE: "0"
+      READSB_LAT: ${READSB_LAT}
+      READSB_LON: ${READSB_LON}
+      READSB_ALT: ${READSB_ALT}
+      READSB_GAIN: ${READSB_GAIN:-autogain}
+      ULTRAFEEDER_HTTPS_PORT: "false"
+      TAR1090_DEFAULTCENTERLAT: ${READSB_LAT}
+      TAR1090_DEFAULTCENTERLON: ${READSB_LON}
+      TAR1090_MESSAGERATEINTITLE: "true"
+    volumes:
+      - ultrafeeder_data:/opt/adsb
+    tmpfs:
+      - /run:exec,size=64M
+      - /tmp:size=128M
+
+volumes:
+  ultrafeeder_data:
