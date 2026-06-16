@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MapContainer, TileLayer, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, useMap, CircleMarker, Tooltip } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { usePlanes } from './usePlanes'
 import { useTrails } from './useTrails'
@@ -191,6 +191,19 @@ export default function App() {
             maxZoom={19}
           />
           <RangeCircles lat={RECEIVER_LAT} lon={RECEIVER_LON} />
+          {/* Home marker */}
+          <CircleMarker
+            center={[RECEIVER_LAT, RECEIVER_LON]}
+            radius={7}
+            pathOptions={{ color: '#fac123', weight: 2, fillColor: '#fac123', fillOpacity: 0.25 }}
+          >
+            <Tooltip permanent direction="right" offset={[10, 0]}
+              className=""
+              pane="tooltipPane"
+            >
+              <span style={{ fontSize: 11, fontWeight: 600, color: '#fac123' }}>📡 Casa</span>
+            </Tooltip>
+          </CircleMarker>
           {/* Trail solo per l'aereo selezionato */}
           {selectedPlane && (
             <TrailLine points={getTrail(selectedPlane.hex)} selected={true} />
@@ -211,8 +224,9 @@ export default function App() {
       {/* Sidebar */}
       <aside style={{
         width: 340, display: 'flex', flexDirection: 'column',
-        gap: 12, padding: 16, overflowY: 'auto',
+        gap: 12, padding: 16, overflowY: 'scroll',
         flexShrink: 0, background: 'transparent',
+        height: '100vh',
       }}>
 
         {/* Header */}
@@ -252,7 +266,7 @@ export default function App() {
         )}
 
         {/* Flight list */}
-        <div style={{ ...card, overflow: 'hidden', flex: 1 }}>
+        <div style={{ ...card, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 12px' }}>
             <span style={{ fontSize: 15, fontWeight: 700 }}>Voli</span>
             {selectedHex && (
