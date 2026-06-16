@@ -62,7 +62,7 @@ services:
     environment:
       BEASTHOST: ultrafeeder
       BEASTPORT: 30005
-      FEEDER_ID: ${FLIGHTAWARE_FEEDER_ID}
+      FEEDER_ID: ${FLIGHTAWARE_FEEDER_ID:-}
       TZ: ${TZ:-Europe/Rome}
     depends_on:
       - ultrafeeder
