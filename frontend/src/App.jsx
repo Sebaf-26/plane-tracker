@@ -456,13 +456,16 @@ export default function App() {
       {showHistoryPanel && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9000,
-          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          background: 'rgba(0,0,0,0.75)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => setShowHistoryPanel(false)}>
           <div style={{
-            ...card, width: 380, maxHeight: '80vh',
+            width: 380, maxHeight: '80vh',
             display: 'flex', flexDirection: 'column',
-            overflow: 'hidden',
+            overflow: 'hidden', borderRadius: 20,
+            background: '#111827',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 18px 12px' }}>
               <span style={{ fontSize: 17, fontWeight: 700 }}>Storico aerei ({historicalPlanes.length})</span>
