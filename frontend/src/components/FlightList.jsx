@@ -10,8 +10,10 @@ function isPegaso(flight) {
   return f.startsWith('PEGASO') || f.startsWith('PGSO')
 }
 
+const HELI_CATEGORIES = new Set(['B1', 'B2', 'A7'])
+
 function isHelicopter(p) {
-  return isPegaso(p.flight) || p.category === 'B1' || p.category === 'B2'
+  return isPegaso(p.flight) || HELI_CATEGORIES.has(p.category)
 }
 
 function PlaneRow({ p, selected, onSelect, receiverLat, receiverLon, historical }) {

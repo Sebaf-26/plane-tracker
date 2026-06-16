@@ -13,8 +13,10 @@ function isPegaso(flight) {
   return f.startsWith('PEGASO') || f.startsWith('PGSO')
 }
 
+const HELI_CATEGORIES = new Set(['B1', 'B2', 'A7'])
+
 function isHelicopter(plane) {
-  return isPegaso(plane.flight) || plane.category === 'B1' || plane.category === 'B2'
+  return isPegaso(plane.flight) || HELI_CATEGORIES.has(plane.category)
 }
 
 function makeIcon(plane, selected, historical) {
