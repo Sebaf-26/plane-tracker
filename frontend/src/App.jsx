@@ -33,15 +33,45 @@ const cardInner = { background: 'var(--card-inner)', borderRadius: 'var(--r-lg)'
 
 function StatTile({ label, value, sub, accent, tooltip }) {
   const empty = value == null
+  const [open, setOpen] = useState(false)
   return (
-    <div title={tooltip} style={{
-      ...cardInner, padding: '13px 14px', cursor: tooltip ? 'help' : 'default',
-    }}>
-      <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 5, letterSpacing: 0.3 }}>{label}</div>
+    <div style={{ ...cardInner, padding: '13px 14px', position: 'relative' }}>
+      {/* Label row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+        <span style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: 0.3 }}>{label}</span>
+        {tooltip && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+            style={{
+              width: 14, height: 14, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)',
+              background: open ? 'rgba(250,193,35,0.25)' : 'rgba(255,255,255,0.07)',
+              color: open ? 'var(--accent)' : 'var(--text3)',
+              fontSize: 9, fontWeight: 700, lineHeight: 1,
+              cursor: 'pointer', flexShrink: 0, padding: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >i</button>
+        )}
+      </div>
       <div style={{ fontSize: 14, fontWeight: 700, color: empty ? 'var(--text3)' : (accent ?? 'var(--text)'), lineHeight: 1.2 }}>
         {empty ? '—' : value}
       </div>
       {!empty && sub && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{sub}</div>}
+      {/* Info popup */}
+      {open && tooltip && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 8000 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 8001,
+            background: 'var(--card)', border: '1px solid var(--card-border)',
+            borderRadius: 'var(--r-lg)', padding: '10px 12px',
+            fontSize: 12, color: 'var(--text2)', lineHeight: 1.5,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          }}>
+            {tooltip}
+          </div>
+        </>
+      )}
     </div>
   )
 }
