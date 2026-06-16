@@ -97,7 +97,7 @@ async def poller():
                         if a.get("lat") is None or a.get("lon") is None:
                             continue
                         flight_str = (a.get("flight") or "").strip() or None
-                    rows.append((
+                        rows.append((
                             now_s,
                             a.get("hex"),
                             flight_str,
