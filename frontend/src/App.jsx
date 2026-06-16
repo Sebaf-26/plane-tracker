@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MapContainer, TileLayer, useMap, CircleMarker, Tooltip } from 'react-leaflet'
+import { MapContainer, TileLayer, useMap, CircleMarker } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { usePlanes } from './usePlanes'
 import { useTrails } from './useTrails'
@@ -196,14 +196,7 @@ export default function App() {
             center={[RECEIVER_LAT, RECEIVER_LON]}
             radius={7}
             pathOptions={{ color: '#fac123', weight: 2, fillColor: '#fac123', fillOpacity: 0.25 }}
-          >
-            <Tooltip permanent direction="right" offset={[10, 0]}
-              className=""
-              pane="tooltipPane"
-            >
-              <span style={{ fontSize: 11, fontWeight: 600, color: '#fac123' }}>📡 Casa</span>
-            </Tooltip>
-          </CircleMarker>
+          />
           {/* Trail solo per l'aereo selezionato */}
           {selectedPlane && (
             <TrailLine points={getTrail(selectedPlane.hex)} selected={true} />
