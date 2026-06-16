@@ -14,7 +14,7 @@ function isPegaso(flight) {
 }
 
 function isHelicopter(plane) {
-  return isPegaso(plane.flight) || plane.category === 'A7' || plane.category === 'B2'
+  return isPegaso(plane.flight) || plane.category === 'B1' || plane.category === 'B2'
 }
 
 function makeIcon(plane, selected, historical) {

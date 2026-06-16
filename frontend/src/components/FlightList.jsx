@@ -11,7 +11,7 @@ function isPegaso(flight) {
 }
 
 function isHelicopter(p) {
-  return isPegaso(p.flight) || p.category === 'A7' || p.category === 'B2'
+  return isPegaso(p.flight) || p.category === 'B1' || p.category === 'B2'
 }
 
 function PlaneRow({ p, selected, onSelect, receiverLat, receiverLon, historical }) {
