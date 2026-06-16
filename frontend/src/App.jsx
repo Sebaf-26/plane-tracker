@@ -46,8 +46,22 @@ function StatTile({ label, value, sub, accent, tooltip }) {
   )
 }
 
+function useAircraftInfo(hex) {
+  const [info, setInfo] = useState(null)
+  useEffect(() => {
+    if (!hex) return
+    setInfo(null)
+    fetch(`/api/aircraft/${hex}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setInfo(d) })
+      .catch(() => {})
+  }, [hex])
+  return info
+}
+
 function FullDetail({ plane, onClose }) {
   const sqInfo = squawkInfo(plane.squawk)
+  const acInfo = useAircraftInfo(plane.hex)
   const dist = haversineKm(RECEIVER_LAT, RECEIVER_LON, plane.lat, plane.lon)
   const baroRate = plane.baro_rate ?? plane.geom_rate
   const rateLabel = baroRate != null
@@ -77,6 +91,35 @@ function FullDetail({ plane, onClose }) {
           fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>×</button>
       </div>
+
+      {/* Aircraft info from adsbdb */}
+      {acInfo && (acInfo.registration || acInfo.type || acInfo.owner) && (
+        <div style={{
+          ...cardInner, padding: '10px 12px', marginBottom: 10,
+          display: 'flex', gap: 10, alignItems: 'center',
+        }}>
+          {acInfo.url_photo_thumb && (
+            <img src={acInfo.url_photo_thumb} alt=""
+              style={{ width: 72, height: 48, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+          )}
+          <div style={{ minWidth: 0 }}>
+            {acInfo.registration && (
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{acInfo.registration}</div>
+            )}
+            {(acInfo.manufacturer || acInfo.type) && (
+              <div style={{ fontSize: 12, color: 'var(--text)', marginTop: 1 }}>
+                {[acInfo.manufacturer, acInfo.type].filter(Boolean).join(' ')}
+              </div>
+            )}
+            {acInfo.owner && (
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 1 }}>{acInfo.owner}</div>
+            )}
+            {acInfo.country && (
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>{acInfo.country}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Altitude + speed + compass */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'start', marginBottom: 8 }}>

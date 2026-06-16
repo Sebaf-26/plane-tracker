@@ -70,6 +70,18 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_hex_ts ON positions (hex, ts);
         CREATE INDEX IF NOT EXISTS idx_ts     ON positions (ts);
+        CREATE TABLE IF NOT EXISTS aircraft_info (
+            hex              TEXT PRIMARY KEY,
+            registration     TEXT,
+            type             TEXT,
+            icao_type        TEXT,
+            manufacturer     TEXT,
+            owner            TEXT,
+            country          TEXT,
+            url_photo        TEXT,
+            url_photo_thumb  TEXT,
+            fetched_at       INTEGER NOT NULL
+        );
     """)
     con.commit()
     con.close()
@@ -274,6 +286,56 @@ def stats():
         "oldest_s": now - row["oldest"] if row["oldest"] else None,
         "newest_s": now - row["newest"] if row["newest"] else None,
     }
+
+@app.get("/api/aircraft/{hex_code}")
+async def aircraft_info(hex_code: str):
+    """Lookup registrazione/tipo da adsbdb.com con cache 30 giorni."""
+    hex_code = hex_code.lower()
+    cache_ttl = 30 * 24 * 3600
+    now_s = int(time.time())
+
+    con = get_db()
+    row = con.execute(
+        "SELECT * FROM aircraft_info WHERE hex = ? AND fetched_at > ?",
+        (hex_code, now_s - cache_ttl)
+    ).fetchone()
+    if row:
+        con.close()
+        return dict(row)
+
+    # Fetch da adsbdb
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(f"https://api.adsbdb.com/v0/aircraft/{hex_code}",
+                                 headers={"User-Agent": "HydraPlanes/1.0"})
+        if r.status_code == 200:
+            data = r.json().get("response", {}).get("aircraft") or {}
+            info = {
+                "hex": hex_code,
+                "registration": data.get("registration"),
+                "type": data.get("type"),
+                "icao_type": data.get("icao_type"),
+                "manufacturer": data.get("manufacturer"),
+                "owner": data.get("registered_owner"),
+                "country": data.get("registered_owner_country_name"),
+                "url_photo": data.get("url_photo"),
+                "url_photo_thumb": data.get("url_photo_thumbnail"),
+                "fetched_at": now_s,
+            }
+        else:
+            info = {"hex": hex_code, "fetched_at": now_s}
+    except Exception:
+        info = {"hex": hex_code, "fetched_at": now_s}
+
+    con.execute("""
+        INSERT OR REPLACE INTO aircraft_info
+        (hex, registration, type, icao_type, manufacturer, owner, country, url_photo, url_photo_thumb, fetched_at)
+        VALUES (:hex, :registration, :type, :icao_type, :manufacturer, :owner, :country, :url_photo, :url_photo_thumb, :fetched_at)
+    """, info)
+    con.commit()
+    con.close()
+    return info
+
 
 @app.get("/health")
 def health():
