@@ -6,7 +6,7 @@ import { useTrails } from './useTrails'
 import PlaneMarker from './components/PlaneMarker'
 import TrailLine from './components/TrailLine'
 import FlightList from './components/FlightList'
-import HistoryChart from './components/HistoryChart'
+import BottomPanel from './components/BottomPanel'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub, haversineKm, formatDist } from './utils'
 import Compass from './components/Compass'
 import { squawkInfo } from './squawk'
@@ -26,15 +26,8 @@ function FlyTo({ plane }) {
   return null
 }
 
-const card = {
-  background: 'var(--card)',
-  border: '1px solid var(--card-border)',
-  borderRadius: 'var(--r-xl)',
-}
-const cardInner = {
-  background: 'var(--card-inner)',
-  borderRadius: 'var(--r-lg)',
-}
+const card    = { background: 'var(--card)', border: '1px solid var(--card-border)', borderRadius: 'var(--r-xl)' }
+const cardInner = { background: 'var(--card-inner)', borderRadius: 'var(--r-lg)' }
 
 function StatTile({ label, value, sub, accent }) {
   return (
@@ -56,7 +49,6 @@ function FullDetail({ plane, onClose }) {
 
   return (
     <div style={{ ...card, padding: 18 }}>
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: -0.3 }}>
@@ -79,37 +71,31 @@ function FullDetail({ plane, onClose }) {
         }}>×</button>
       </div>
 
-      {/* Altitude + speed + compass */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'start', marginBottom: 8 }}>
         <StatTile label="Altitude" value={formatAlt(plane.alt_baro)} sub={formatAltSub(plane.alt_baro)} />
         <StatTile label="Speed GS" value={formatSpeed(plane.gs)} sub={formatSpeedSub(plane.gs)} />
         <Compass heading={plane.track} size={76} />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
         <StatTile label="Alt. geometrica" value={formatAlt(plane.alt_geom)} sub={formatAltSub(plane.alt_geom)} />
         <StatTile label="Rateo vert." value={rateLabel} accent={baroRate > 0 ? 'var(--green)' : baroRate < 0 ? '#ff9f0a' : null} />
         <StatTile label="Distanza" value={formatDist(dist)} />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
         <StatTile label="IAS" value={plane.ias != null ? `${plane.ias} kt` : null} sub={plane.ias != null ? `${Math.round(plane.ias * 1.852)} km/h` : null} />
         <StatTile label="TAS" value={plane.tas != null ? `${plane.tas} kt` : null} sub={plane.tas != null ? `${Math.round(plane.tas * 1.852)} km/h` : null} />
         <StatTile label="Mach" value={plane.mach != null ? plane.mach.toFixed(2) : null} />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
         <StatTile label="Heading vero" value={plane.true_heading != null ? `${Math.round(plane.true_heading)}°` : null} />
         <StatTile label="Heading mag." value={plane.mag_heading != null ? `${Math.round(plane.mag_heading)}°` : null} />
         <StatTile label="Roll" value={plane.roll != null ? `${plane.roll.toFixed(1)}°` : null} />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
         <StatTile label="Nav. quota MCP" value={plane.nav_altitude_mcp != null ? formatAlt(plane.nav_altitude_mcp) : null} />
         <StatTile label="Nav. quota FMS" value={plane.nav_altitude_fms != null ? formatAlt(plane.nav_altitude_fms) : null} />
         <StatTile label="Nav. heading" value={plane.nav_heading != null ? `${Math.round(plane.nav_heading)}°` : null} />
       </div>
-
       {(plane.wind_speed != null || plane.oat != null) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
           <StatTile label="Vento" value={plane.wind_speed != null ? `${plane.wind_speed} kt` : null} sub={plane.wind_dir != null ? `${plane.wind_dir}°` : null} />
@@ -117,39 +103,27 @@ function FullDetail({ plane, onClose }) {
           <StatTile label="TAT" value={plane.tat != null ? `${plane.tat} °C` : null} />
         </div>
       )}
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
         <StatTile label="Categoria" value={plane.category ?? null} />
         <StatTile label="RSSI" value={plane.rssi != null ? `${plane.rssi.toFixed(1)} dB` : null} />
         <StatTile label="Messaggi" value={plane.messages?.toLocaleString() ?? null} />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 8 }}>
         <StatTile label="Tipo" value={plane.type ?? null} />
         <StatTile label="Visto" value={plane.seen != null ? `${plane.seen.toFixed(0)}s fa` : null} />
         <StatTile label="Pos. vista" value={plane.seen_pos != null ? `${plane.seen_pos.toFixed(0)}s fa` : null} />
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
         <StatTile label="Latitudine" value={plane.lat?.toFixed(5)} />
         <StatTile label="Longitudine" value={plane.lon?.toFixed(5)} />
       </div>
-
       {plane.emergency && plane.emergency !== 'none' && (
         <div style={{
           marginTop: 10, padding: '10px 14px', borderRadius: 'var(--r-md)',
           background: 'rgba(255,69,58,0.15)', border: '1px solid rgba(255,69,58,0.4)',
           fontSize: 13, fontWeight: 700, color: 'var(--red)',
-        }}>
-          ⚠️ Emergenza: {plane.emergency}
-        </div>
+        }}>⚠️ Emergenza: {plane.emergency}</div>
       )}
-
-      {/* Grafici storici dal DB */}
-      <div style={{ borderTop: '1px solid rgba(255,255,255,0.07)', marginTop: 14, paddingTop: 14 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Storico ultimi 10 min</div>
-        <HistoryChart hex={plane.hex} />
-      </div>
     </div>
   )
 }
@@ -161,7 +135,7 @@ export default function App() {
 
   const selectedPlane = planes.find((p) => p.hex === selectedHex) ?? null
 
-  function handleListSelect(hex) {
+  function handleSelect(hex) {
     setSelectedHex((prev) => (prev === hex ? null : hex))
   }
 
@@ -178,18 +152,18 @@ export default function App() {
             attribution='&copy; <a href="https://carto.com">CARTO</a>'
             maxZoom={19}
           />
+          {/* Trail solo per l'aereo selezionato */}
+          {selectedPlane && (
+            <TrailLine points={getTrail(selectedPlane.hex)} selected={true} />
+          )}
           {planes.map((p) => (
-            <TrailLine
-              key={`trail-${p.hex}`}
-              points={getTrail(p.hex)}
-              selected={p.hex === selectedHex}
-            />
-          ))}
-          {planes.map((p) => (
-            <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} />
+            <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
           ))}
           <FlyTo plane={selectedPlane} />
         </MapContainer>
+
+        {/* Bottom panel grafici */}
+        <BottomPanel plane={selectedPlane} onClose={() => setSelectedHex(null)} />
       </div>
 
       {/* Sidebar */}
@@ -223,7 +197,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Full detail */}
+        {/* Detail panel (solo quando selezionato dalla lista) */}
         {selectedPlane && (
           <FullDetail plane={selectedPlane} onClose={() => setSelectedHex(null)} />
         )}
@@ -242,7 +216,7 @@ export default function App() {
           <FlightList
             planes={planes}
             selected={selectedHex}
-            onSelect={handleListSelect}
+            onSelect={handleSelect}
             receiverLat={RECEIVER_LAT}
             receiverLon={RECEIVER_LON}
           />
