@@ -136,7 +136,6 @@ export default function App() {
   const { planes, lastUpdate, error } = usePlanes()
   const known = useKnown()
   const [selectedHex, setSelectedHex] = useState(null)
-  const [showAllHistory, setShowAllHistory] = useState(false)
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
 
@@ -272,29 +271,12 @@ export default function App() {
           </div>
           <FlightList
             planes={planes}
-            historicalPlanes={showAllHistory ? historicalPlanes : historicalPlanes.slice(0, 5)}
+            historicalPlanes={historicalPlanes}
             selected={selectedHex}
             onSelect={handleSelect}
             receiverLat={RECEIVER_LAT}
             receiverLon={RECEIVER_LON}
           />
-          {historicalPlanes.length > 5 && (
-            <button
-              onClick={() => setShowAllHistory((v) => !v)}
-              style={{
-                display: 'block', width: 'calc(100% - 32px)', margin: '0 16px 16px',
-                padding: '10px', borderRadius: 'var(--r-lg)',
-                background: 'var(--card-inner)', border: '1px solid rgba(255,255,255,0.07)',
-                color: 'var(--text2)', fontSize: 13, fontWeight: 600,
-                cursor: 'pointer', fontFamily: 'var(--font)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {showAllHistory
-                ? `▲ Mostra meno`
-                : `▼ Vedi tutti gli storici (${historicalPlanes.length})`}
-            </button>
-          )}
         </div>
       </aside>
     </div>
