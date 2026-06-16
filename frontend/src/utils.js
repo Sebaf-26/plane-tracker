@@ -35,3 +35,9 @@ export function formatDist(km) {
   if (km == null) return '---'
   return `${Math.round(km)} km`
 }
+
+export function slantRangeKm(groundKm, altFt) {
+  if (groundKm == null) return null
+  const altKm = altFt != null && altFt !== 'ground' ? altFt * 0.0003048 : 0
+  return Math.sqrt(groundKm ** 2 + altKm ** 2)
+}
