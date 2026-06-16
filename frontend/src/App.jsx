@@ -132,6 +132,19 @@ export default function App() {
   const { planes, lastUpdate, error } = usePlanes()
   const [selectedHex, setSelectedHex] = useState(null)
   const { getTrail } = useTrails(planes, selectedHex)
+  const [dbStats, setDbStats] = useState(null)
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const r = await fetch('/api/stats')
+        if (r.ok) setDbStats(await r.json())
+      } catch {}
+    }
+    fetchStats()
+    const t = setInterval(fetchStats, 15000)
+    return () => clearInterval(t)
+  }, [])
 
   const selectedPlane = planes.find((p) => p.hex === selectedHex) ?? null
 
@@ -195,6 +208,13 @@ export default function App() {
               </div>
             ))}
           </div>
+          {dbStats && (
+            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
+              {dbStats.oldest_s != null
+                ? `📦 Storico DB: ${Math.round(dbStats.oldest_s / 60)} min · ${dbStats.rows.toLocaleString()} righe · ${dbStats.aircraft} aerei`
+                : '📦 DB in attesa di dati…'}
+            </div>
+          )}
         </div>
 
         {/* Detail panel (solo quando selezionato dalla lista) */}

@@ -36,9 +36,9 @@ services:
     environment:
       ULTRAFEEDER_URL: http://ultrafeeder/data/aircraft.json
       DB_PATH: /data/hydra.db
-      RETAIN_MINUTES: "10"
+      RETAIN_MINUTES: "${RETAIN_MINUTES:-10}"
     volumes:
-      - backend_data:/data
+      - ${DB_HOST_PATH:-./data}:/data
     depends_on:
       - ultrafeeder
 
@@ -58,4 +58,3 @@ services:
 
 volumes:
   ultrafeeder_data:
-  backend_data:

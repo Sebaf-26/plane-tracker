@@ -204,6 +204,25 @@ def known():
     return [dict(r) for r in rows]
 
 
+@app.get("/api/stats")
+def stats():
+    con = get_db()
+    row = con.execute("""
+        SELECT COUNT(*) as rows,
+               MIN(ts) as oldest,
+               MAX(ts) as newest,
+               COUNT(DISTINCT hex) as aircraft
+        FROM positions
+    """).fetchone()
+    con.close()
+    now = int(time.time())
+    return {
+        "rows": row["rows"],
+        "aircraft": row["aircraft"],
+        "oldest_s": now - row["oldest"] if row["oldest"] else None,
+        "newest_s": now - row["newest"] if row["newest"] else None,
+    }
+
 @app.get("/health")
 def health():
     return {"ok": True}
