@@ -12,6 +12,8 @@ ULTRAFEEDER_URL = os.getenv("ULTRAFEEDER_URL", "http://ultrafeeder/data/aircraft
 DB_PATH = os.getenv("DB_PATH", "/data/hydra.db")
 RETAIN_S = int(os.getenv("RETAIN_MINUTES", "10")) * 60
 RETAIN_HEMS_S = 7 * 24 * 3600  # 1 settimana per PEGASO
+# Dopo quanto tempo eliminiamo un aereo che non si vede più (default 24h)
+RETAIN_AIRCRAFT_S = int(os.getenv("RETAIN_AIRCRAFT_HOURS", "24")) * 3600
 POLL_S = 2
 
 def is_pegaso(flight: str | None) -> bool:
@@ -141,11 +143,29 @@ async def poller():
                             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """, rows)
 
-                    # Prune: normale dopo RETAIN_S, HEMS dopo 1 settimana
+                    # Per ogni aereo non-HEMS: tieni solo gli ultimi RETAIN_S secondi
+                    # del SUO ultimo avvistamento (non rispetto a "adesso").
+                    # Così gli aerei scomparsi mantengono la loro traccia.
+                    # Dopo RETAIN_AIRCRAFT_S dall'ultimo avvistamento, elimina tutto.
                     _db.execute("""
                         DELETE FROM positions
-                        WHERE ts < ? AND is_hems = 0
-                    """, (now_s - RETAIN_S,))
+                        WHERE is_hems = 0
+                          AND hex IN (
+                              SELECT hex FROM positions
+                              WHERE is_hems = 0
+                              GROUP BY hex
+                              HAVING MAX(ts) < ?
+                          )
+                    """, (now_s - RETAIN_AIRCRAFT_S,))
+                    _db.execute("""
+                        DELETE FROM positions
+                        WHERE is_hems = 0
+                          AND ts < (
+                              SELECT MAX(ts) FROM positions p2
+                              WHERE p2.hex = positions.hex
+                          ) - ?
+                    """, (RETAIN_S,))
+                    # HEMS: 1 settimana
                     _db.execute("""
                         DELETE FROM positions
                         WHERE ts < ? AND is_hems = 1
