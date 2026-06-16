@@ -382,34 +382,17 @@ export default function App() {
       }}>
 
         {/* Header */}
-        <div style={{ ...card, padding: 20 }}>
-          <div style={{ fontSize: 30, fontWeight: 900, letterSpacing: -0.5, lineHeight: 1.1, marginBottom: 6 }}>
-            Radar ADS-B
-          </div>
-          <div style={{
-            fontSize: 14, fontWeight: 600, marginBottom: 16,
-            color: error ? 'var(--red)' : planes.length > 0 ? 'var(--green)' : 'var(--text2)',
-          }}>
-            {error ? 'Feed non raggiungibile' : planes.length > 0 ? 'Receiver online' : 'In attesa di dati…'}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            {[
-              { label: 'Aerei visibili', value: error ? '—' : String(planes.length) },
-              { label: 'Aggiornamento', value: timeStr },
-            ].map(({ label, value }) => (
-              <div key={label} style={{ ...cardInner, padding: '14px 16px' }}>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5 }}>{value}</div>
-              </div>
-            ))}
-          </div>
-          {dbStats && (
-            <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text3)' }}>
-              {dbStats.oldest_s != null
-                ? `📦 Storico DB: ${Math.round(dbStats.oldest_s / 60)} min · ${dbStats.rows.toLocaleString()} righe · ${dbStats.aircraft} aerei`
-                : '📦 DB in attesa di dati…'}
+        <div style={{ ...card, padding: '16px 20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3 }}>HydraPlanes</div>
+            <div style={{ fontSize: 11, color: error ? 'var(--red)' : 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+              {error ? '⚠ offline' : timeStr}
             </div>
-          )}
+          </div>
+          <div style={{ ...cardInner, padding: '14px 16px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>Aerei visibili</div>
+            <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5 }}>{error ? '—' : String(planes.length)}</div>
+          </div>
         </div>
 
         {/* Detail panel (solo quando selezionato dalla lista) */}
