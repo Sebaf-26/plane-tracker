@@ -389,9 +389,9 @@ export default function App() {
               {error ? '⚠ offline' : timeStr}
             </div>
           </div>
-          <div style={{ ...cardInner, padding: '14px 16px' }}>
-            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 4 }}>Aerei visibili</div>
-            <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.5 }}>{error ? '—' : String(planes.length)}</div>
+          <div style={{ ...cardInner, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13, color: 'var(--text3)' }}>Aerei in tempo reale</span>
+            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5 }}>{error ? '—' : String(planes.length)}</span>
           </div>
         </div>
 
