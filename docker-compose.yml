@@ -57,6 +57,38 @@ services:
     profiles:
       - fr24
 
+  piaware:
+    image: ghcr.io/sdr-enthusiasts/docker-piaware:latest
+    container_name: hydraplanes-piaware
+    restart: unless-stopped
+    environment:
+      BEASTHOST: ultrafeeder
+      BEASTPORT: 30005
+      FEEDER_ID: ${FLIGHTAWARE_FEEDER_ID}
+      TZ: ${TZ:-Europe/Rome}
+    depends_on:
+      - ultrafeeder
+    profiles:
+      - flightaware
+
+  adsbexchange:
+    image: ghcr.io/sdr-enthusiasts/docker-adsbexchange:latest
+    container_name: hydraplanes-adsbx
+    restart: unless-stopped
+    environment:
+      BEASTHOST: ultrafeeder
+      BEASTPORT: 30005
+      UUID: ${ADSBX_UUID}
+      SITENAME: ${ADSBX_SITENAME:-HydraPlanes}
+      LAT: ${READSB_LAT}
+      LON: ${READSB_LON}
+      ALT: ${READSB_ALT}
+      TZ: ${TZ:-Europe/Rome}
+    depends_on:
+      - ultrafeeder
+    profiles:
+      - adsbx
+
   frontend:
     build:
       context: ./frontend
