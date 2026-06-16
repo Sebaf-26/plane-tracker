@@ -67,6 +67,19 @@ html, body, #root {
 }
 .leaflet-control-zoom a:hover { background: rgba(255,255,255,0.08) !important; }
 .leaflet-attribution-flag { display: none !important; }
+.range-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: rgba(255,255,255,0.35) !important;
+  font-size: 10px !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.range-label::before { display: none !important; }
+
 .leaflet-control-attribution {
   background: rgba(0,0,0,0.4) !important;
   color: var(--text3) !important;

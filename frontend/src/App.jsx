@@ -5,6 +5,7 @@ import { usePlanes } from './usePlanes'
 import { useTrails } from './useTrails'
 import PlaneMarker from './components/PlaneMarker'
 import TrailLine from './components/TrailLine'
+import RangeCircles from './components/RangeCircles'
 import FlightList from './components/FlightList'
 import BottomPanel from './components/BottomPanel'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub, haversineKm, formatDist, slantRangeKm } from './utils'
@@ -165,6 +166,7 @@ export default function App() {
             attribution='&copy; <a href="https://carto.com">CARTO</a>'
             maxZoom={19}
           />
+          <RangeCircles lat={RECEIVER_LAT} lon={RECEIVER_LON} />
           {/* Trail solo per l'aereo selezionato */}
           {selectedPlane && (
             <TrailLine points={getTrail(selectedPlane.hex)} selected={true} />
