@@ -33,20 +33,28 @@ const cardInner = { background: 'var(--card-inner)', borderRadius: 'var(--r-lg)'
 
 function StatTile({ label, value, sub, accent, tooltip }) {
   const empty = value == null
-  const [open, setOpen] = useState(false)
+  const [popupPos, setPopupPos] = useState(null)
+
+  function handleInfo(e) {
+    e.stopPropagation()
+    if (popupPos) { setPopupPos(null); return }
+    const r = e.currentTarget.getBoundingClientRect()
+    setPopupPos({ x: r.left, y: r.top })
+  }
+
   return (
-    <div style={{ ...cardInner, padding: '13px 14px', position: 'relative' }}>
+    <div style={{ ...cardInner, padding: '13px 14px' }}>
       {/* Label row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
         <span style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: 0.3 }}>{label}</span>
         {tooltip && (
           <button
-            onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+            onClick={handleInfo}
             style={{
-              width: 14, height: 14, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.2)',
-              background: open ? 'rgba(250,193,35,0.25)' : 'rgba(255,255,255,0.07)',
-              color: open ? 'var(--accent)' : 'var(--text3)',
-              fontSize: 9, fontWeight: 700, lineHeight: 1,
+              width: 15, height: 15, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.25)',
+              background: popupPos ? 'rgba(250,193,35,0.3)' : 'rgba(255,255,255,0.08)',
+              color: popupPos ? 'var(--accent)' : 'var(--text3)',
+              fontSize: 9, fontWeight: 800, lineHeight: 1,
               cursor: 'pointer', flexShrink: 0, padding: 0,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}
@@ -57,17 +65,24 @@ function StatTile({ label, value, sub, accent, tooltip }) {
         {empty ? '—' : value}
       </div>
       {!empty && sub && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{sub}</div>}
-      {/* Info popup */}
-      {open && tooltip && (
+
+      {/* Info popup — fixed position, never clipped */}
+      {popupPos && tooltip && typeof document !== 'undefined' && (
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 8000 }} onClick={() => setOpen(false)} />
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9500 }} onClick={() => setPopupPos(null)} />
           <div style={{
-            position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 8001,
-            background: 'var(--card)', border: '1px solid var(--card-border)',
-            borderRadius: 'var(--r-lg)', padding: '10px 12px',
-            fontSize: 12, color: 'var(--text2)', lineHeight: 1.5,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            position: 'fixed',
+            top: Math.min(popupPos.y + 20, window.innerHeight - 140),
+            left: Math.max(8, Math.min(popupPos.x - 120, window.innerWidth - 260)),
+            width: 240,
+            zIndex: 9501,
+            background: '#1c2333',
+            border: '1px solid rgba(255,255,255,0.18)',
+            borderRadius: 12, padding: '12px 14px',
+            fontSize: 13, color: 'rgba(255,255,255,0.9)', lineHeight: 1.55,
+            boxShadow: '0 12px 40px rgba(0,0,0,0.75)',
           }}>
+            <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 700, marginBottom: 5, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</div>
             {tooltip}
           </div>
         </>
