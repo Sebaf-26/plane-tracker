@@ -11,7 +11,14 @@ from fastapi.middleware.cors import CORSMiddleware
 ULTRAFEEDER_URL = os.getenv("ULTRAFEEDER_URL", "http://ultrafeeder/data/aircraft.json")
 DB_PATH = os.getenv("DB_PATH", "/data/hydra.db")
 RETAIN_S = int(os.getenv("RETAIN_MINUTES", "10")) * 60
+RETAIN_HEMS_S = 7 * 24 * 3600  # 1 settimana per PEGASO
 POLL_S = 2
+
+def is_pegaso(flight: str | None) -> bool:
+    if not flight:
+        return False
+    f = flight.upper().strip()
+    return f.startswith("PEGASO") or f.startswith("PGSO")
 
 # ---------------------------------------------------------------------------
 # DB
@@ -31,6 +38,7 @@ def init_db():
             ts          INTEGER NOT NULL,
             hex         TEXT NOT NULL,
             flight      TEXT,
+            is_hems     INTEGER NOT NULL DEFAULT 0,
             lat         REAL,
             lon         REAL,
             alt_baro    REAL,
@@ -86,10 +94,12 @@ async def poller():
                     for a in aircraft:
                         if a.get("lat") is None or a.get("lon") is None:
                             continue
-                        rows.append((
+                        flight_str = (a.get("flight") or "").strip() or None
+                    rows.append((
                             now_s,
                             a.get("hex"),
-                            (a.get("flight") or "").strip() or None,
+                            flight_str,
+                            1 if is_pegaso(flight_str) else 0,
                             a.get("lat"),
                             a.get("lon"),
                             a.get("alt_baro") if a.get("alt_baro") != "ground" else 0,
@@ -121,18 +131,25 @@ async def poller():
                     if rows:
                         _db.executemany("""
                             INSERT INTO positions (
-                                ts, hex, flight, lat, lon,
+                                ts, hex, flight, is_hems, lat, lon,
                                 alt_baro, alt_geom, gs, ias, tas, mach,
                                 track, mag_heading, true_heading,
                                 baro_rate, geom_rate, squawk, emergency,
                                 category, nav_alt_mcp, nav_alt_fms, nav_heading,
                                 roll, rssi, messages,
                                 wind_speed, wind_dir, oat, tat
-                            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """, rows)
 
-                    # Prune older than RETAIN_S
-                    _db.execute("DELETE FROM positions WHERE ts < ?", (now_s - RETAIN_S,))
+                    # Prune: normale dopo RETAIN_S, HEMS dopo 1 settimana
+                    _db.execute("""
+                        DELETE FROM positions
+                        WHERE ts < ? AND is_hems = 0
+                    """, (now_s - RETAIN_S,))
+                    _db.execute("""
+                        DELETE FROM positions
+                        WHERE ts < ? AND is_hems = 1
+                    """, (now_s - RETAIN_HEMS_S,))
                     _db.commit()
 
             except Exception:
