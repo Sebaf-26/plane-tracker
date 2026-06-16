@@ -31,14 +31,16 @@ const card    = { background: 'var(--card)', border: '1px solid var(--card-borde
 const cardInner = { background: 'var(--card-inner)', borderRadius: 'var(--r-lg)' }
 
 function StatTile({ label, value, sub, accent, tooltip }) {
-  if (value == null) return null
+  const empty = value == null
   return (
     <div title={tooltip} style={{
       ...cardInner, padding: '13px 14px', cursor: tooltip ? 'help' : 'default',
     }}>
       <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 5, letterSpacing: 0.3 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: accent ?? 'var(--text)', lineHeight: 1.2 }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{sub}</div>}
+      <div style={{ fontSize: 14, fontWeight: 700, color: empty ? 'var(--text3)' : (accent ?? 'var(--text)'), lineHeight: 1.2 }}>
+        {empty ? '—' : value}
+      </div>
+      {!empty && sub && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{sub}</div>}
     </div>
   )
 }
@@ -110,7 +112,7 @@ function FullDetail({ plane, onClose }) {
           { label: 'Pos. vista', value: plane.seen_pos != null ? `${plane.seen_pos.toFixed(0)}s fa` : null, tooltip: 'Secondi dall\'ultimo messaggio con coordinate GPS ricevuto.' },
           { label: 'Latitudine', value: plane.lat?.toFixed(5), tooltip: 'Coordinata GPS latitudine.' },
           { label: 'Longitudine', value: plane.lon?.toFixed(5), tooltip: 'Coordinata GPS longitudine.' },
-        ].filter(t => t.value != null)
+        ]
 
         return (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
