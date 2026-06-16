@@ -295,6 +295,7 @@ export default function App() {
   const known = useKnown()
   const [selectedHex, setSelectedHex] = useState(null)
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
+  const [showHistorical, setShowHistorical] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 900
   const { getTrail } = useTrails(planes, selectedHex)
@@ -365,11 +366,28 @@ export default function App() {
           {planes.map((p) => (
             <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
           ))}
-          {historicalPlanes.map((p) => (
+          {showHistorical && historicalPlanes.map((p) => (
             <PlaneMarker key={`h-${p.hex}`} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} historical={true} />
           ))}
           <FlyTo plane={selectedPlane} />
         </MapContainer>
+
+        {/* Toggle storico sulla mappa */}
+        <button
+          onClick={() => setShowHistorical(v => !v)}
+          style={{
+            position: 'absolute', top: 16, right: 16, zIndex: 1100,
+            padding: '7px 13px', borderRadius: 20,
+            background: showHistorical ? 'rgba(250,193,35,0.18)' : 'rgba(30,30,40,0.85)',
+            border: `1.5px solid ${showHistorical ? 'rgba(250,193,35,0.5)' : 'rgba(255,255,255,0.15)'}`,
+            color: showHistorical ? 'var(--accent)' : 'var(--text3)',
+            fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            fontFamily: 'var(--font)',
+            backdropFilter: 'blur(8px)',
+          }}
+        >
+          🕓 Storico {showHistorical ? 'ON' : 'OFF'}
+        </button>
 
         {/* Bottom panel grafici */}
         <BottomPanel plane={selectedPlane} onClose={() => setSelectedHex(null)} />
