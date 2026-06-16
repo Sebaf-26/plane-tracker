@@ -2,7 +2,7 @@ import { Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub } from '../utils'
 import { squawkInfo } from '../squawk'
-import { getSpecial, iconPath, HELI_CATEGORIES_SET } from '../specialCallsigns'
+import { getSpecial, iconPath } from '../specialCallsigns'
 
 const HELI_CAT = new Set(['B1', 'B2', 'A7'])
 
