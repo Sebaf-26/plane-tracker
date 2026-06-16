@@ -78,7 +78,7 @@ services:
       UUID: ${ADSBX_UUID}
       SITENAME: ${ADSBX_SITENAME:-HydraPlanes}
       LAT: ${READSB_LAT}
-      LON: ${READSB_LON}
+      LONG: ${READSB_LON}
       ALT: ${READSB_ALT}
       TZ: ${TZ:-Europe/Rome}
     depends_on:
