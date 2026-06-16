@@ -59,8 +59,9 @@ services:
     image: ghcr.io/sdr-enthusiasts/docker-piaware:latest
     container_name: hydraplanes-piaware
     restart: unless-stopped
+    network_mode: host
     environment:
-      BEASTHOST: ultrafeeder
+      BEASTHOST: 127.0.0.1
       BEASTPORT: 30005
       FEEDER_ID: ${FLIGHTAWARE_FEEDER_ID:-}
       TZ: ${TZ:-Europe/Rome}
