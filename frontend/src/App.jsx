@@ -76,6 +76,38 @@ function StatTile({ label, value, sub, accent, tooltip }) {
   )
 }
 
+function DetailSections({ sections }) {
+  const [open, setOpen] = useState(() => Object.fromEntries(sections.map(s => [s.title, true])))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {sections.map(({ title, icon, tiles }) => {
+        const isOpen = open[title]
+        return (
+          <div key={title} style={{ ...cardInner, overflow: 'hidden' }}>
+            <button
+              onClick={() => setOpen(p => ({ ...p, [title]: !isOpen }))}
+              style={{
+                width: '100%', background: 'none', border: 'none', padding: '9px 12px',
+                display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+                color: 'var(--text)', fontFamily: 'var(--font)',
+              }}
+            >
+              <span style={{ fontSize: 13 }}>{icon}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, flex: 1, textAlign: 'left', letterSpacing: 0.3 }}>{title}</span>
+              <span style={{ fontSize: 11, color: 'var(--text3)', transition: 'transform 0.2s', display: 'inline-block', transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}>▾</span>
+            </button>
+            {isOpen && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, padding: '0 8px 8px' }}>
+                {tiles.map(t => <StatTile key={t.label} {...t} />)}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function useAircraftInfo(hex) {
   const [info, setInfo] = useState(null)
   useEffect(() => {
@@ -151,48 +183,86 @@ function FullDetail({ plane, onClose }) {
         </div>
       )}
 
-      {/* Altitude + speed + compass */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'start', marginBottom: 8 }}>
-        <StatTile label="Altitude" value={formatAlt(plane.alt_baro)} sub={formatAltSub(plane.alt_baro)} tooltip="Quota barometrica: misurata dalla pressione atmosferica, usata per la separazione del traffico aereo." />
-        <StatTile label="Speed GS" value={formatSpeed(plane.gs)} sub={formatSpeedSub(plane.gs)} tooltip="Ground Speed: velocità dell'aereo rispetto al suolo (include l'effetto del vento)." />
-        <Compass heading={plane.track} size={76} />
+      {/* Compass + quick stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'start', marginBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <StatTile label="Altitude" value={formatAlt(plane.alt_baro)} sub={formatAltSub(plane.alt_baro)} tooltip="Quota barometrica: misurata dalla pressione atmosferica, usata per la separazione del traffico aereo." />
+          <StatTile label="Speed GS" value={formatSpeed(plane.gs)} sub={formatSpeedSub(plane.gs)} tooltip="Ground Speed: velocità dell'aereo rispetto al suolo (include l'effetto del vento)." />
+          <StatTile label="Rateo vert." value={rateLabel} accent={baroRate > 0 ? 'var(--green)' : baroRate < 0 ? '#ff9f0a' : null} tooltip="Velocità di salita o discesa in piedi al minuto. Verde = salita, arancione = discesa." />
+          <StatTile label="Track" value={plane.track != null ? `${Math.round(plane.track)}°` : null} tooltip="Direzione di movimento effettiva dell'aereo rispetto al Nord." />
+        </div>
+        <Compass heading={plane.track} size={88} />
       </div>
 
       {(() => {
         const groundKm = haversineKm(RECEIVER_LAT, RECEIVER_LON, plane.lat, plane.lon)
         const slant = slantRangeKm(groundKm, plane.alt_baro)
-        const tiles = [
-          { label: 'Alt. geometrica', value: formatAlt(plane.alt_geom), sub: formatAltSub(plane.alt_geom), tooltip: 'Quota GPS geometrica: misurata dai satelliti, più precisa dell\'altitudine barometrica.' },
-          { label: 'Rateo verticale', value: rateLabel, accent: baroRate > 0 ? 'var(--green)' : baroRate < 0 ? '#ff9f0a' : null, tooltip: 'Velocità di salita o discesa in piedi al minuto. Verde = salita, arancione = discesa.' },
-          { label: 'Dist. orizzontale', value: formatDist(groundKm), tooltip: 'Distanza orizzontale (proiezione a terra) tra il receiver e l\'aereo.' },
-          { label: 'Dist. reale', value: formatDist(slant), tooltip: 'Distanza in linea d\'aria 3D calcolata con il teorema di Pitagora: √(dist_orizzontale² + quota²).' },
-          { label: 'IAS', value: plane.ias != null ? `${plane.ias} kt` : null, sub: plane.ias != null ? `${Math.round(plane.ias * 1.852)} km/h` : null, tooltip: 'Indicated Airspeed: velocità indicata dallo strumento di bordo (non corregge densità aria).' },
-          { label: 'TAS', value: plane.tas != null ? `${plane.tas} kt` : null, sub: plane.tas != null ? `${Math.round(plane.tas * 1.852)} km/h` : null, tooltip: 'True Airspeed: velocità reale rispetto all\'aria, corretta per altitudine e temperatura.' },
-          { label: 'Mach', value: plane.mach != null ? plane.mach.toFixed(2) : null, tooltip: 'Numero di Mach: rapporto tra la velocità dell\'aereo e la velocità del suono in quel momento.' },
-          { label: 'Heading vero', value: plane.true_heading != null ? `${Math.round(plane.true_heading)}°` : null, tooltip: 'Direzione in cui punta il muso dell\'aereo rispetto al Nord geografico (poli).' },
-          { label: 'Heading mag.', value: plane.mag_heading != null ? `${Math.round(plane.mag_heading)}°` : null, tooltip: 'Direzione in cui punta il muso rispetto al Nord magnetico (usato nelle carte aeronautiche).' },
-          { label: 'Roll', value: plane.roll != null ? `${plane.roll.toFixed(1)}°` : null, tooltip: 'Angolo di rollio (inclinazione laterale). Positivo = inclinato a destra.' },
-          { label: 'Nav. quota MCP', value: plane.nav_altitude_mcp != null ? formatAlt(plane.nav_altitude_mcp) : null, tooltip: 'Mode Control Panel: quota impostata sul pannello dell\'autopilota dal pilota.' },
-          { label: 'Nav. quota FMS', value: plane.nav_altitude_fms != null ? formatAlt(plane.nav_altitude_fms) : null, tooltip: 'Flight Management System: quota target calcolata dal computer di bordo per il piano di volo.' },
-          { label: 'Nav. heading', value: plane.nav_heading != null ? `${Math.round(plane.nav_heading)}°` : null, tooltip: 'Heading target impostato sull\'autopilota.' },
-          { label: 'Vento', value: plane.wind_speed != null ? `${plane.wind_speed} kt` : null, sub: plane.wind_dir != null ? `dir. ${plane.wind_dir}°` : null, tooltip: 'Velocità e direzione del vento stimata dall\'aereo (differenza tra TAS e GS).' },
-          { label: 'OAT', value: plane.oat != null ? `${plane.oat} °C` : null, tooltip: 'Outside Air Temperature: temperatura esterna rilevata dai sensori dell\'aereo.' },
-          { label: 'TAT', value: plane.tat != null ? `${plane.tat} °C` : null, tooltip: 'Total Air Temperature: temperatura che include il riscaldamento aerodinamico alla velocità di volo.' },
-          { label: 'Categoria', value: plane.category ?? null, tooltip: 'Categoria ADS-B: A1=piccolo, A2=medio, A3=pesante (>136t), A5=altissima velocità, B=rotante, C=aliante...' },
-          { label: 'RSSI', value: plane.rssi != null ? `${plane.rssi.toFixed(1)} dB` : null, tooltip: 'Received Signal Strength Indicator: potenza del segnale ricevuto. Più vicino allo 0 = segnale più forte.' },
-          { label: 'Messaggi', value: plane.messages?.toLocaleString() ?? null, tooltip: 'Numero totale di messaggi ADS-B ricevuti da questo aereo da quando è nel range.' },
-          { label: 'Tipo sorgente', value: plane.type ?? null, tooltip: 'Come è stata ottenuta la posizione: adsb_icao = segnale diretto, mlat = multilaterazione, tisb = ritrasmesso da terra.' },
-          { label: 'Visto', value: plane.seen != null ? `${plane.seen.toFixed(0)}s fa` : null, tooltip: 'Secondi dall\'ultimo messaggio ricevuto da questo aereo.' },
-          { label: 'Pos. vista', value: plane.seen_pos != null ? `${plane.seen_pos.toFixed(0)}s fa` : null, tooltip: 'Secondi dall\'ultimo messaggio con coordinate GPS ricevuto.' },
-          { label: 'Latitudine', value: plane.lat?.toFixed(5), tooltip: 'Coordinata GPS latitudine.' },
-          { label: 'Longitudine', value: plane.lon?.toFixed(5), tooltip: 'Coordinata GPS longitudine.' },
+
+        const sections = [
+          {
+            title: 'Quota',
+            icon: '↕',
+            tiles: [
+              { label: 'Alt. barometrica', value: formatAlt(plane.alt_baro), sub: formatAltSub(plane.alt_baro), tooltip: 'Quota barometrica: misurata dalla pressione atmosferica, usata per la separazione del traffico aereo.' },
+              { label: 'Alt. geometrica', value: formatAlt(plane.alt_geom), sub: formatAltSub(plane.alt_geom), tooltip: 'Quota GPS geometrica: misurata dai satelliti, più precisa dell\'altitudine barometrica.' },
+              { label: 'Nav. MCP', value: plane.nav_altitude_mcp != null ? formatAlt(plane.nav_altitude_mcp) : null, tooltip: 'Mode Control Panel: quota impostata sul pannello dell\'autopilota dal pilota.' },
+              { label: 'Nav. FMS', value: plane.nav_altitude_fms != null ? formatAlt(plane.nav_altitude_fms) : null, tooltip: 'Flight Management System: quota target calcolata dal computer di bordo per il piano di volo.' },
+            ],
+          },
+          {
+            title: 'Velocità',
+            icon: '⚡',
+            tiles: [
+              { label: 'GS', value: formatSpeed(plane.gs), sub: formatSpeedSub(plane.gs), tooltip: 'Ground Speed: velocità dell\'aereo rispetto al suolo (include l\'effetto del vento).' },
+              { label: 'IAS', value: plane.ias != null ? `${plane.ias} kt` : null, sub: plane.ias != null ? `${Math.round(plane.ias * 1.852)} km/h` : null, tooltip: 'Indicated Airspeed: velocità indicata dallo strumento di bordo (non corregge densità aria).' },
+              { label: 'TAS', value: plane.tas != null ? `${plane.tas} kt` : null, sub: plane.tas != null ? `${Math.round(plane.tas * 1.852)} km/h` : null, tooltip: 'True Airspeed: velocità reale rispetto all\'aria, corretta per altitudine e temperatura.' },
+              { label: 'Mach', value: plane.mach != null ? plane.mach.toFixed(2) : null, tooltip: 'Numero di Mach: rapporto tra la velocità dell\'aereo e la velocità del suono in quel momento.' },
+            ],
+          },
+          {
+            title: 'Navigazione',
+            icon: '🧭',
+            tiles: [
+              { label: 'Heading vero', value: plane.true_heading != null ? `${Math.round(plane.true_heading)}°` : null, tooltip: 'Direzione in cui punta il muso dell\'aereo rispetto al Nord geografico (poli).' },
+              { label: 'Heading mag.', value: plane.mag_heading != null ? `${Math.round(plane.mag_heading)}°` : null, tooltip: 'Direzione in cui punta il muso rispetto al Nord magnetico (usato nelle carte aeronautiche).' },
+              { label: 'Nav. heading', value: plane.nav_heading != null ? `${Math.round(plane.nav_heading)}°` : null, tooltip: 'Heading target impostato sull\'autopilota.' },
+              { label: 'Roll', value: plane.roll != null ? `${plane.roll.toFixed(1)}°` : null, tooltip: 'Angolo di rollio (inclinazione laterale). Positivo = inclinato a destra.' },
+            ],
+          },
+          {
+            title: 'Posizione',
+            icon: '📍',
+            tiles: [
+              { label: 'Dist. orizzontale', value: formatDist(groundKm), tooltip: 'Distanza orizzontale (proiezione a terra) tra il receiver e l\'aereo.' },
+              { label: 'Dist. reale', value: formatDist(slant), tooltip: 'Distanza in linea d\'aria 3D calcolata con il teorema di Pitagora: √(dist_orizzontale² + quota²).' },
+              { label: 'Latitudine', value: plane.lat?.toFixed(5), tooltip: 'Coordinata GPS latitudine.' },
+              { label: 'Longitudine', value: plane.lon?.toFixed(5), tooltip: 'Coordinata GPS longitudine.' },
+            ],
+          },
+          {
+            title: 'Meteo',
+            icon: '🌡',
+            tiles: [
+              { label: 'Vento', value: plane.wind_speed != null ? `${plane.wind_speed} kt` : null, sub: plane.wind_dir != null ? `dir. ${plane.wind_dir}°` : null, tooltip: 'Velocità e direzione del vento stimata dall\'aereo (differenza tra TAS e GS).' },
+              { label: 'OAT', value: plane.oat != null ? `${plane.oat} °C` : null, tooltip: 'Outside Air Temperature: temperatura esterna rilevata dai sensori dell\'aereo.' },
+              { label: 'TAT', value: plane.tat != null ? `${plane.tat} °C` : null, tooltip: 'Total Air Temperature: temperatura che include il riscaldamento aerodinamico alla velocità di volo.' },
+            ],
+          },
+          {
+            title: 'Segnale',
+            icon: '📡',
+            tiles: [
+              { label: 'RSSI', value: plane.rssi != null ? `${plane.rssi.toFixed(1)} dB` : null, tooltip: 'Received Signal Strength Indicator: potenza del segnale ricevuto. Più vicino allo 0 = segnale più forte.' },
+              { label: 'Messaggi', value: plane.messages?.toLocaleString() ?? null, tooltip: 'Numero totale di messaggi ADS-B ricevuti da questo aereo da quando è nel range.' },
+              { label: 'Tipo sorgente', value: plane.type ?? null, tooltip: 'Come è stata ottenuta la posizione: adsb_icao = segnale diretto, mlat = multilaterazione, tisb = ritrasmesso da terra.' },
+              { label: 'Categoria', value: plane.category ?? null, tooltip: 'Categoria ADS-B: A1=piccolo, A2=medio, A3=pesante (>136t), A5=altissima velocità, B=rotante, C=aliante...' },
+              { label: 'Visto', value: plane.seen != null ? `${plane.seen.toFixed(0)}s fa` : null, tooltip: 'Secondi dall\'ultimo messaggio ricevuto da questo aereo.' },
+              { label: 'Pos. vista', value: plane.seen_pos != null ? `${plane.seen_pos.toFixed(0)}s fa` : null, tooltip: 'Secondi dall\'ultimo messaggio con coordinate GPS ricevuto.' },
+            ],
+          },
         ]
 
-        return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-            {tiles.map((t) => <StatTile key={t.label} {...t} />)}
-          </div>
-        )
+        return <DetailSections sections={sections} />
       })()}
       {plane.emergency && plane.emergency !== 'none' && (
         <div style={{
