@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { MapContainer, TileLayer, useMap, CircleMarker } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { usePlanes } from './usePlanes'
@@ -295,6 +295,8 @@ export default function App() {
   const known = useKnown()
   const [selectedHex, setSelectedHex] = useState(null)
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 900
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
 
@@ -339,10 +341,10 @@ export default function App() {
   const timeStr = lastUpdate?.toLocaleTimeString('it-IT', { hour12: false }) ?? '--:--:--'
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh', overflow: 'hidden' }}>
 
       {/* Map */}
-      <div style={{ flex: 1, position: 'relative' }}>
+      <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
         <MapContainer center={[RECEIVER_LAT, RECEIVER_LON]} zoom={8} style={{ height: '100%', width: '100%' }}>
           <TileLayer
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
@@ -371,15 +373,51 @@ export default function App() {
 
         {/* Bottom panel grafici */}
         <BottomPanel plane={selectedPlane} onClose={() => setSelectedHex(null)} />
+
+        {/* Mobile toggle button */}
+        {isMobile && (
+          <button
+            onClick={() => setSidebarOpen(v => !v)}
+            style={{
+              position: 'absolute', bottom: selectedPlane ? 220 : 16, right: 16, zIndex: 1100,
+              width: 52, height: 52, borderRadius: '50%',
+              background: '#111827', border: '1.5px solid rgba(255,255,255,0.15)',
+              color: 'white', fontSize: 22, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+            }}
+          >☰</button>
+        )}
       </div>
 
-      {/* Sidebar */}
-      <aside style={{
+      {/* Sidebar — desktop: fixed column | mobile: bottom sheet overlay */}
+      {(!isMobile || sidebarOpen) && isMobile && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setSidebarOpen(false)} />
+      )}
+      <aside style={isMobile ? {
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2001,
+        maxHeight: '75vh', display: 'flex', flexDirection: 'column',
+        gap: 12, padding: 16, overflowY: 'auto',
+        background: '#0d1117',
+        borderRadius: '20px 20px 0 0',
+        border: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: '0 -8px 40px rgba(0,0,0,0.7)',
+        transform: sidebarOpen ? 'translateY(0)' : 'translateY(100%)',
+        transition: 'transform 0.3s ease',
+      } : {
         width: 340, display: 'flex', flexDirection: 'column',
         gap: 12, padding: 16, overflowY: 'scroll',
         flexShrink: 0, background: 'transparent',
         height: '100vh',
       }}>
+
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4, marginTop: -4 }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ ...card, padding: '16px 20px' }}>
