@@ -54,8 +54,6 @@ services:
       TZ: ${TZ:-Europe/Rome}
     depends_on:
       - ultrafeeder
-    profiles:
-      - fr24
 
   piaware:
     image: ghcr.io/sdr-enthusiasts/docker-piaware:latest
