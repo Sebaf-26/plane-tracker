@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { usePlanes } from './usePlanes'
 import { useTrails } from './useTrails'
+import { useKnown } from './useKnown'
 import PlaneMarker from './components/PlaneMarker'
 import TrailLine from './components/TrailLine'
 import RangeCircles from './components/RangeCircles'
@@ -133,9 +134,28 @@ function FullDetail({ plane, onClose }) {
 
 export default function App() {
   const { planes, lastUpdate, error } = usePlanes()
+  const known = useKnown()
   const [selectedHex, setSelectedHex] = useState(null)
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
+
+  // Planes that have DB history but are no longer in the live feed
+  const liveHexSet = new Set(planes.map((p) => p.hex))
+  const historicalPlanes = known
+    .filter((k) => !liveHexSet.has(k.hex) && k.last_lat != null && k.last_lon != null)
+    .map((k) => ({
+      hex: k.hex,
+      flight: k.flight,
+      lat: k.last_lat,
+      lon: k.last_lon,
+      alt_baro: k.last_alt_baro,
+      gs: k.last_gs,
+      track: k.last_track,
+      squawk: k.last_squawk,
+      category: k.last_category,
+      last_seen: k.last_seen,
+      _historical: true,
+    }))
 
   useEffect(() => {
     async function fetchStats() {
@@ -149,7 +169,9 @@ export default function App() {
     return () => clearInterval(t)
   }, [])
 
-  const selectedPlane = planes.find((p) => p.hex === selectedHex) ?? null
+  const selectedPlane = planes.find((p) => p.hex === selectedHex)
+    ?? historicalPlanes.find((p) => p.hex === selectedHex)
+    ?? null
 
   function handleSelect(hex) {
     setSelectedHex((prev) => (prev === hex ? null : hex))
@@ -175,6 +197,9 @@ export default function App() {
           )}
           {planes.map((p) => (
             <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
+          ))}
+          {historicalPlanes.map((p) => (
+            <PlaneMarker key={`h-${p.hex}`} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} historical={true} />
           ))}
           <FlyTo plane={selectedPlane} />
         </MapContainer>
@@ -239,6 +264,7 @@ export default function App() {
           </div>
           <FlightList
             planes={planes}
+            historicalPlanes={historicalPlanes}
             selected={selectedHex}
             onSelect={handleSelect}
             receiverLat={RECEIVER_LAT}

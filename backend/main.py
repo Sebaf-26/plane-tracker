@@ -211,11 +211,26 @@ def history(hex_code: str):
 
 @app.get("/api/known")
 def known():
-    """Lista hex degli aerei con storico nel DB."""
+    """Lista aerei con storico nel DB, con ultima posizione nota."""
     con = get_db()
     rows = con.execute("""
-        SELECT DISTINCT hex, MAX(flight) as flight, COUNT(*) as points
-        FROM positions GROUP BY hex ORDER BY points DESC
+        SELECT p.hex,
+               p.flight,
+               p.lat        AS last_lat,
+               p.lon        AS last_lon,
+               p.alt_baro   AS last_alt_baro,
+               p.gs         AS last_gs,
+               p.track      AS last_track,
+               p.squawk     AS last_squawk,
+               p.category   AS last_category,
+               p.ts         AS last_seen,
+               COUNT(*)     AS points
+        FROM positions p
+        INNER JOIN (
+            SELECT hex, MAX(ts) AS max_ts FROM positions GROUP BY hex
+        ) latest ON p.hex = latest.hex AND p.ts = latest.max_ts
+        GROUP BY p.hex
+        ORDER BY p.ts DESC
     """).fetchall()
     con.close()
     return [dict(r) for r in rows]

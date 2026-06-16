@@ -49,12 +49,12 @@ function planeSvg(angle, color, size) {
     </svg>`
 }
 
-function makeIcon(plane, selected) {
+function makeIcon(plane, selected, historical) {
   const angle   = plane.track ?? 0
   const heli    = isHelicopter(plane)
   const pegaso  = isPegaso(plane.flight)
-  const color   = selected ? '#0a84ff' : pegaso ? '#ff453a' : '#fac123'
-  const glow    = selected ? 'rgba(10,132,255,0.6)' : pegaso ? 'rgba(255,69,58,0.5)' : 'rgba(250,193,35,0.45)'
+  const color   = selected ? '#0a84ff' : historical ? '#888888' : pegaso ? '#ff453a' : '#fac123'
+  const glow    = selected ? 'rgba(10,132,255,0.6)' : historical ? 'rgba(120,120,120,0.3)' : pegaso ? 'rgba(255,69,58,0.5)' : 'rgba(250,193,35,0.45)'
   const size    = selected ? 40 : 30
 
   const svg = heli ? helicopterSvg(angle, color, size) : planeSvg(angle, color, size)
@@ -69,9 +69,9 @@ function makeIcon(plane, selected) {
   })
 }
 
-export default function PlaneMarker({ plane, selected, onClick }) {
+export default function PlaneMarker({ plane, selected, onClick, historical }) {
   const callsign = plane.flight?.trim() || plane.hex.toUpperCase()
-  const icon = makeIcon(plane, selected)
+  const icon = makeIcon(plane, selected, historical)
   const pegaso = isPegaso(plane.flight)
 
   return (
