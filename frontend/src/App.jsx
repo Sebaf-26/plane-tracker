@@ -136,6 +136,7 @@ export default function App() {
   const { planes, lastUpdate, error } = usePlanes()
   const known = useKnown()
   const [selectedHex, setSelectedHex] = useState(null)
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false)
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
 
@@ -271,14 +272,61 @@ export default function App() {
           </div>
           <FlightList
             planes={planes}
-            historicalPlanes={historicalPlanes}
+            historicalPlanes={historicalPlanes.slice(0, 5)}
             selected={selectedHex}
             onSelect={handleSelect}
             receiverLat={RECEIVER_LAT}
             receiverLon={RECEIVER_LON}
           />
+          {/* Storico button */}
+          <button
+            onClick={() => setShowHistoryPanel(true)}
+            style={{
+              display: 'block', width: 'calc(100% - 32px)', margin: '0 16px 16px',
+              padding: '11px', borderRadius: 'var(--r-lg)',
+              background: 'var(--card-inner)', border: '1px solid rgba(255,255,255,0.1)',
+              color: 'var(--text2)', fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'var(--font)',
+            }}
+          >
+            🕓 Storico ({historicalPlanes.length})
+          </button>
         </div>
       </aside>
+
+      {/* History panel overlay */}
+      {showHistoryPanel && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9000,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setShowHistoryPanel(false)}>
+          <div style={{
+            ...card, width: 380, maxHeight: '80vh',
+            display: 'flex', flexDirection: 'column',
+            overflow: 'hidden',
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 18px 12px' }}>
+              <span style={{ fontSize: 17, fontWeight: 700 }}>Storico aerei ({historicalPlanes.length})</span>
+              <button onClick={() => setShowHistoryPanel(false)} style={{
+                background: 'var(--card-inner)', border: 'none', borderRadius: 20,
+                color: 'var(--text2)', width: 28, height: 28, cursor: 'pointer',
+                fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>×</button>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <FlightList
+                planes={[]}
+                historicalPlanes={historicalPlanes}
+                selected={selectedHex}
+                onSelect={(hex) => { handleSelect(hex); setShowHistoryPanel(false) }}
+                receiverLat={RECEIVER_LAT}
+                receiverLon={RECEIVER_LON}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
