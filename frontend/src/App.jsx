@@ -439,7 +439,7 @@ export default function App() {
           {historicalPlanes.length > 0 && (
             <FlightList
               planes={[]}
-              historicalPlanes={historicalPlanes.slice(0, 5)}
+              historicalPlanes={historicalPlanes.slice(0, 4)}
               selected={selectedHex}
               onSelect={handleSelect}
               receiverLat={RECEIVER_LAT}
