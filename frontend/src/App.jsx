@@ -12,6 +12,7 @@ import BottomPanel from './components/BottomPanel'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub, haversineKm, formatDist, slantRangeKm } from './utils'
 import Compass from './components/Compass'
 import { squawkInfo } from './squawk'
+import { getSpecial } from './specialCallsigns'
 
 const RECEIVER_LAT = import.meta.env.VITE_LAT ? parseFloat(import.meta.env.VITE_LAT) : 43.9
 const RECEIVER_LON = import.meta.env.VITE_LON ? parseFloat(import.meta.env.VITE_LON) : 10.2
@@ -290,6 +291,77 @@ function FullDetail({ plane, onClose }) {
   )
 }
 
+function groupHistorical(planes) {
+  const groups = {}
+  for (const p of planes) {
+    const sp = getSpecial(p.flight)
+    const key = sp ? sp.label : (() => {
+      const cs = p.flight?.trim().toUpperCase() ?? ''
+      return cs.length >= 3 ? cs.slice(0, 3) : (cs || p.hex.toUpperCase())
+    })()
+    if (!groups[key]) groups[key] = { label: key, color: sp?.color ?? null, planes: [] }
+    groups[key].planes.push(p)
+  }
+  return Object.values(groups).sort((a, b) => {
+    const aSpec = a.color != null
+    const bSpec = b.color != null
+    if (aSpec !== bSpec) return aSpec ? -1 : 1
+    return a.label.localeCompare(b.label)
+  })
+}
+
+function HistoryPanel({ historicalPlanes, selectedHex, onSelect, onClose, receiverLat, receiverLon }) {
+  const groups = groupHistorical(historicalPlanes)
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9000,
+      background: 'rgba(0,0,0,0.75)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }} onClick={onClose}>
+      <div style={{
+        width: 380, maxHeight: '80vh',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden', borderRadius: 20,
+        background: '#111827',
+        border: '1px solid rgba(255,255,255,0.12)',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 18px 12px' }}>
+          <span style={{ fontSize: 17, fontWeight: 700 }}>Storico aerei ({historicalPlanes.length})</span>
+          <button onClick={onClose} style={{
+            background: 'var(--card-inner)', border: 'none', borderRadius: 20,
+            color: 'var(--text2)', width: 28, height: 28, cursor: 'pointer',
+            fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>×</button>
+        </div>
+        <div style={{ overflowY: 'auto', flex: 1, padding: '0 12px 16px' }}>
+          {groups.map(g => (
+            <div key={g.label} style={{ marginBottom: 12 }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase',
+                color: g.color ?? 'var(--text3)',
+                padding: '8px 4px 4px',
+                borderBottom: `1px solid ${g.color ? `${g.color}33` : 'rgba(255,255,255,0.06)'}`,
+                marginBottom: 6,
+              }}>
+                {g.label} ({g.planes.length})
+              </div>
+              <FlightList
+                planes={[]}
+                historicalPlanes={g.planes}
+                selected={selectedHex}
+                onSelect={onSelect}
+                receiverLat={receiverLat}
+                receiverLon={receiverLon}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const { planes, lastUpdate, error } = usePlanes()
   const known = useKnown()
@@ -521,39 +593,14 @@ export default function App() {
 
       {/* History panel overlay */}
       {showHistoryPanel && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9000,
-          background: 'rgba(0,0,0,0.75)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }} onClick={() => setShowHistoryPanel(false)}>
-          <div style={{
-            width: 380, maxHeight: '80vh',
-            display: 'flex', flexDirection: 'column',
-            overflow: 'hidden', borderRadius: 20,
-            background: '#111827',
-            border: '1px solid rgba(255,255,255,0.12)',
-            boxShadow: '0 24px 64px rgba(0,0,0,0.8)',
-          }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 18px 12px' }}>
-              <span style={{ fontSize: 17, fontWeight: 700 }}>Storico aerei ({historicalPlanes.length})</span>
-              <button onClick={() => setShowHistoryPanel(false)} style={{
-                background: 'var(--card-inner)', border: 'none', borderRadius: 20,
-                color: 'var(--text2)', width: 28, height: 28, cursor: 'pointer',
-                fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>×</button>
-            </div>
-            <div style={{ overflowY: 'auto', flex: 1 }}>
-              <FlightList
-                planes={[]}
-                historicalPlanes={historicalPlanes}
-                selected={selectedHex}
-                onSelect={(hex) => { handleSelect(hex); setShowHistoryPanel(false) }}
-                receiverLat={RECEIVER_LAT}
-                receiverLon={RECEIVER_LON}
-              />
-            </div>
-          </div>
-        </div>
+        <HistoryPanel
+          historicalPlanes={historicalPlanes}
+          selectedHex={selectedHex}
+          onSelect={(hex) => { handleSelect(hex); setShowHistoryPanel(false) }}
+          onClose={() => setShowHistoryPanel(false)}
+          receiverLat={RECEIVER_LAT}
+          receiverLon={RECEIVER_LON}
+        />
       )}
     </div>
   )
