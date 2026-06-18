@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
   ComposedChart, Area, Line, XAxis, YAxis,
-  Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts'
+import { splitSessions, SESSION_COLORS, GAP_S } from '../sessions'
 
 function fmt(ts) {
   return new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -27,7 +28,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function HistoryChart({ hex }) {
-  const [data, setData] = useState([])
+  const [data, setData] = useState({ points: [], gapTimes: [] })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,9 +40,17 @@ export default function HistoryChart({ hex }) {
         // Deduplica per timestamp e normalizza
         const seen = new Set()
         const clean = []
+        let prevTs = null
+        const gapTimes = []
+        let sessionIdx = 0
         for (const r of rows) {
           if (seen.has(r.ts)) continue
           seen.add(r.ts)
+          if (prevTs != null && r.ts - prevTs > GAP_S) {
+            // inserisci null per spezzare la linea nel grafico
+            clean.push({ ts: r.ts, time: fmt(r.ts), _gap: true, sessionIdx: ++sessionIdx })
+            gapTimes.push(fmt(r.ts))
+          }
           clean.push({
             ts: r.ts,
             time: fmt(r.ts),
@@ -50,9 +59,11 @@ export default function HistoryChart({ hex }) {
             gs_kt:  r.gs != null ? Math.round(r.gs) : null,
             gs_kmh: r.gs != null ? Math.round(r.gs * 1.852) : null,
             baro_rate: r.baro_rate != null ? Math.round(r.baro_rate) : null,
+            sessionIdx,
           })
+          prevTs = r.ts
         }
-        setData(clean)
+        setData({ points: clean, gapTimes })
       })
       .catch(() => setData([]))
       .finally(() => setLoading(false))
@@ -64,11 +75,20 @@ export default function HistoryChart({ hex }) {
     </div>
   )
 
-  if (!data.length) return (
+  if (!data.points.length) return (
     <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
       Nessun dato storico disponibile.
     </div>
   )
+
+  const { points, gapTimes } = data
+
+  const refLines = gapTimes.map((t, i) => (
+    <ReferenceLine key={t} x={t} stroke={SESSION_COLORS[(i + 1) % SESSION_COLORS.length]}
+      strokeWidth={1.5} strokeDasharray="4 3"
+      label={{ value: `#${i + 2}`, position: 'insideTopRight', fontSize: 9, fill: SESSION_COLORS[(i + 1) % SESSION_COLORS.length] }}
+    />
+  ))
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -77,7 +97,7 @@ export default function HistoryChart({ hex }) {
         ALTITUDINE (ft / m)
       </div>
       <ResponsiveContainer width="100%" height={120}>
-        <ComposedChart data={data} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+        <ComposedChart data={points} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
           <defs>
             <linearGradient id="altGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"  stopColor="#fac123" stopOpacity={0.25} />
@@ -88,7 +108,8 @@ export default function HistoryChart({ hex }) {
           <XAxis dataKey="time" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
           <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
           <Tooltip content={<CustomTooltip />} />
-          <Area type="monotone" dataKey="alt_ft" name="Alt ft" stroke="#fac123" strokeWidth={1.5} fill="url(#altGrad)" dot={false} connectNulls />
+          <Area type="monotone" dataKey="alt_ft" name="Alt ft" stroke="#fac123" strokeWidth={1.5} fill="url(#altGrad)" dot={false} connectNulls={false} />
+          {refLines}
         </ComposedChart>
       </ResponsiveContainer>
 
@@ -97,7 +118,7 @@ export default function HistoryChart({ hex }) {
         VELOCITÀ (kt) · RATEO VERTICALE (ft/min)
       </div>
       <ResponsiveContainer width="100%" height={110}>
-        <ComposedChart data={data} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+        <ComposedChart data={points} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
           <defs>
             <linearGradient id="gsGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%"  stopColor="#64d2ff" stopOpacity={0.2} />
@@ -109,8 +130,9 @@ export default function HistoryChart({ hex }) {
           <YAxis yAxisId="gs" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} tickLine={false} axisLine={false} />
           <YAxis yAxisId="rate" orientation="right" tick={{ fill: 'rgba(255,255,255,0.2)', fontSize: 9 }} tickLine={false} axisLine={false} />
           <Tooltip content={<CustomTooltip />} />
-          <Area yAxisId="gs" type="monotone" dataKey="gs_kt" name="GS kt" stroke="#64d2ff" strokeWidth={1.5} fill="url(#gsGrad)" dot={false} connectNulls />
-          <Line yAxisId="rate" type="monotone" dataKey="baro_rate" name="Rateo ft/min" stroke="#30d158" strokeWidth={1} dot={false} connectNulls strokeDasharray="3 2" />
+          <Area yAxisId="gs" type="monotone" dataKey="gs_kt" name="GS kt" stroke="#64d2ff" strokeWidth={1.5} fill="url(#gsGrad)" dot={false} connectNulls={false} />
+          <Line yAxisId="rate" type="monotone" dataKey="baro_rate" name="Rateo ft/min" stroke="#30d158" strokeWidth={1} dot={false} connectNulls={false} strokeDasharray="3 2" />
+          {refLines}
         </ComposedChart>
       </ResponsiveContainer>
     </div>

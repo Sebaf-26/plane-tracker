@@ -1,39 +1,43 @@
 import { Polyline } from 'react-leaflet'
+import { splitSessions, SESSION_COLORS } from '../sessions'
 
-// Divide il trail in N segmenti con opacità decrescente verso la coda
 const SEGMENTS = 6
 
 export default function TrailLine({ points, selected }) {
   if (!points || points.length < 2) return null
 
-  const color = selected ? '#0a84ff' : '#fac123'
-  const size = Math.ceil(points.length / SEGMENTS)
-  const segments = []
+  const sessions = splitSessions(points)
 
-  for (let i = 0; i < SEGMENTS; i++) {
-    const start = Math.max(0, points.length - (i + 1) * size)
-    const end   = points.length - i * size
-    const chunk = points.slice(start, end + 1)  // +1 per overlap tra segmenti
-    if (chunk.length < 2) continue
+  return <>
+    {sessions.map((session, si) => {
+      if (session.length < 2) return null
+      const color = selected ? SESSION_COLORS[si % SESSION_COLORS.length] : '#fac123'
+      const size = Math.ceil(session.length / SEGMENTS)
 
-    const opacity = selected
-      ? 0.85 - i * 0.12
-      : 0.7  - i * 0.10
+      return Array.from({ length: SEGMENTS }, (_, i) => {
+        const start = Math.max(0, session.length - (i + 1) * size)
+        const end   = session.length - i * size
+        const chunk = session.slice(start, end + 1)
+        if (chunk.length < 2) return null
 
-    segments.push(
-      <Polyline
-        key={i}
-        positions={chunk.map((p) => [p.lat, p.lon])}
-        pathOptions={{
-          color,
-          weight: selected ? 2 : 1.5,
-          opacity: Math.max(opacity, 0.05),
-          lineCap: 'round',
-          lineJoin: 'round',
-        }}
-      />
-    )
-  }
+        const opacity = selected
+          ? 0.85 - i * 0.12
+          : 0.7  - i * 0.10
 
-  return <>{segments}</>
+        return (
+          <Polyline
+            key={`${si}-${i}`}
+            positions={chunk.map((p) => [p.lat, p.lon])}
+            pathOptions={{
+              color,
+              weight: selected ? 2 : 1.5,
+              opacity: Math.max(opacity, 0.05),
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
+        )
+      })
+    })}
+  </>
 }
