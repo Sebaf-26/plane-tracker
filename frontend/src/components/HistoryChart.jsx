@@ -65,7 +65,7 @@ export default function HistoryChart({ hex }) {
         }
         setData({ points: clean, gapTimes })
       })
-      .catch(() => setData([]))
+      .catch(() => setData({ points: [], gapTimes: [] }))
       .finally(() => setLoading(false))
   }, [hex])
 
