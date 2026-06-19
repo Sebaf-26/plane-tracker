@@ -6,12 +6,14 @@ const SEGMENTS = 6
 export default function TrailLine({ points, selected }) {
   if (!points || points.length < 2) return null
 
-  const sessions = splitSessions(points)
+  // Limita alle ultime 3 sessioni per evitare crash con storici lunghi (PEGASO 7gg)
+  const allSessions = splitSessions(points)
+  const sessions = allSessions.slice(-3)
 
   return <>
     {sessions.map((session, si) => {
       if (session.length < 2) return null
-      const color = selected ? SESSION_COLORS[si % SESSION_COLORS.length] : '#fac123'
+      const color = selected ? SESSION_COLORS[(allSessions.length - sessions.length + si) % SESSION_COLORS.length] : '#fac123'
       const size = Math.ceil(session.length / SEGMENTS)
 
       return Array.from({ length: SEGMENTS }, (_, i) => {

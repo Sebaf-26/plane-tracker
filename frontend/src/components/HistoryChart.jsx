@@ -37,13 +37,15 @@ export default function HistoryChart({ hex }) {
     fetch(`/api/history/${hex}`)
       .then((r) => r.json())
       .then((rows) => {
+        // Limita agli ultimi 800 punti per evitare crash con storici lunghi (PEGASO 7gg ecc.)
+        const limited = rows.slice(-800)
         // Deduplica per timestamp e normalizza
         const seen = new Set()
         const clean = []
         let prevTs = null
         const gapTimes = []
         let sessionIdx = 0
-        for (const r of rows) {
+        for (const r of limited) {
           if (seen.has(r.ts)) continue
           seen.add(r.ts)
           if (prevTs != null && r.ts - prevTs > GAP_S) {
