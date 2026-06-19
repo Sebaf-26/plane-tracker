@@ -110,7 +110,7 @@ export default function WebhookSettings({ onClose }) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState(null)  // 'ok' | 'err' | null
+  const [testResult, setTestResult] = useState(null)  // { ok: bool, message: string } | null
   const [customPrefix, setCustomPrefix] = useState('')
 
   useEffect(() => {
@@ -166,12 +166,13 @@ export default function WebhookSettings({ onClose }) {
     setTestResult(null)
     try {
       const r = await fetch('/api/webhook/test', { method: 'POST' })
-      setTestResult(r.ok ? 'ok' : 'err')
+      const body = await r.json().catch(() => ({}))
+      setTestResult({ ok: r.ok, message: body.message || body.detail || '' })
     } catch {
-      setTestResult('err')
+      setTestResult({ ok: false, message: 'Errore di rete' })
     } finally {
       setTesting(false)
-      setTimeout(() => setTestResult(null), 4000)
+      setTimeout(() => setTestResult(null), 6000)
     }
   }
 
@@ -453,17 +454,21 @@ export default function WebhookSettings({ onClose }) {
             disabled={!cfg.url || testing}
             style={{
               flex: 1, padding: '10px', borderRadius: 10, border: 'none',
-              background: testResult === 'ok' ? 'rgba(48,209,88,0.2)'
-                        : testResult === 'err' ? 'rgba(255,69,58,0.2)'
+              background: testResult?.ok ? 'rgba(48,209,88,0.2)'
+                        : testResult ? 'rgba(255,69,58,0.2)'
                         : 'rgba(255,255,255,0.08)',
-              color: testResult === 'ok' ? '#30d158'
-                   : testResult === 'err' ? '#ff453a'
+              color: testResult?.ok ? '#30d158'
+                   : testResult ? '#ff453a'
                    : 'var(--text2)',
               fontSize: 13, fontWeight: 600, cursor: cfg.url ? 'pointer' : 'not-allowed',
               fontFamily: 'var(--font)', opacity: cfg.url ? 1 : 0.4,
             }}
           >
-            {testing ? 'Invio…' : testResult === 'ok' ? '✓ Inviato' : testResult === 'err' ? '✗ Errore' : 'Test webhook'}
+            {testing
+            ? 'Invio…'
+            : testResult
+              ? (testResult.ok ? `✓ ${testResult.message}` : `✗ ${testResult.message}`)
+              : 'Test — ultimo PEGASO reale'}
           </button>
           <button
             onClick={async () => { await save(); onClose() }}

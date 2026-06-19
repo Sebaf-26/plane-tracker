@@ -703,29 +703,57 @@ def save_webhook_config(cfg: WebhookConfigIn):
 
 @app.post("/api/webhook/test")
 async def test_webhook():
-    """Manda un payload di test al webhook configurato."""
+    """Manda il payload dell'ultimo PEGASO reale trovato nel DB.
+    Se non c'è nessun PEGASO usa dati sintetici."""
     con = get_db()
     cfg = con.execute("SELECT * FROM webhook_config WHERE id = 1").fetchone()
-    con.close()
     if not cfg or not cfg["url"]:
+        con.close()
         raise HTTPException(status_code=400, detail="Nessun URL webhook configurato")
 
-    fake_aircraft = {
-        "lat": RECEIVER_LAT + 0.05,
-        "lon": RECEIVER_LON + 0.05,
-        "alt_baro": 2500,
-        "gs": 120,
-        "track": 270,
-        "squawk": "7000",
-    }
+    # Cerca l'ultima posizione di qualsiasi aereo PEGASO/PGSO nel DB
+    row = con.execute("""
+        SELECT hex, flight, lat, lon, alt_baro, gs, track, squawk, session_id, ts
+        FROM positions
+        WHERE (flight LIKE 'PEGASO%' OR flight LIKE 'PGSO%')
+          AND lat IS NOT NULL
+        ORDER BY ts DESC
+        LIMIT 1
+    """).fetchone()
+    con.close()
+
     now_s = int(time.time())
 
+    if row:
+        hex_code  = row["hex"]
+        flight    = row["flight"] or "PEGASO"
+        session_id = row["session_id"] or "test000"
+        aircraft = {
+            "lat":      row["lat"],
+            "lon":      row["lon"],
+            "alt_baro": row["alt_baro"],
+            "gs":       row["gs"],
+            "track":    row["track"],
+            "squawk":   row["squawk"],
+        }
+    else:
+        # Nessun PEGASO nel DB: usa dati sintetici
+        hex_code   = "abc123"
+        flight     = "PEGASO51"
+        session_id = "test000"
+        aircraft   = {
+            "lat": RECEIVER_LAT + 0.05 if RECEIVER_LAT else 45.0,
+            "lon": RECEIVER_LON + 0.05 if RECEIVER_LON else 9.0,
+            "alt_baro": 2500,
+            "gs": 120,
+            "track": 270,
+            "squawk": "7000",
+        }
+
     try:
-        await fire_webhook(
-            "abc123", "PEGASO51", "test123",
-            fake_aircraft, now_s, is_test=True
-        )
-        return {"ok": True, "message": "Payload di test inviato"}
+        await fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=True)
+        source = f"dati reali ({flight})" if row else "dati sintetici (nessun PEGASO nel DB)"
+        return {"ok": True, "message": f"Payload inviato — {source}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
