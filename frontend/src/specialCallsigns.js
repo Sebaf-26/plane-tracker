@@ -10,21 +10,21 @@ export const SPECIAL_CALLSIGNS = [
   { prefix: 'POLI',  label: 'Polizia di Stato',   icon: 'shield',  color: '#0a84ff' },
   { prefix: 'POLIS', label: 'Polizia di Stato',   icon: 'shield',  color: '#0a84ff' },
 
-  // Carabinieri
+  // Carabinieri — CC seguito da cifra (es. CC4051); CCM = Air Corsica → escluso
   { prefix: 'FIAMMA',label: 'Carabinieri',         icon: 'shield',  color: '#cc0000' },
   { prefix: 'FIAA',  label: 'Carabinieri',         icon: 'shield',  color: '#cc0000' },
-  { prefix: 'CC',    label: 'Carabinieri',         icon: 'shield',  color: '#cc0000' },
+  { prefix: 'CC',    label: 'Carabinieri',         icon: 'shield',  color: '#cc0000', digitRequired: true },
 
-  // Vigili del Fuoco
+  // Vigili del Fuoco — VF seguito da cifra (es. VF001); VFR ecc. → esclusi
   { prefix: 'DRAGO', label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
   { prefix: 'DRG',   label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
-  { prefix: 'VF',    label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
+  { prefix: 'VF',    label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30', digitRequired: true },
   { prefix: 'VVF',   label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
 
-  // Guardia Costiera
+  // Guardia Costiera — CP seguito da cifra (es. CP905); CPA = Cathay Pacific → escluso
   { prefix: 'KOALA', label: 'Guardia Costiera',    icon: 'anchor',  color: '#30d158' },
   { prefix: 'KLA',   label: 'Guardia Costiera',    icon: 'anchor',  color: '#30d158' },
-  { prefix: 'CP',    label: 'Guardia Costiera',    icon: 'anchor',  color: '#30d158' },
+  { prefix: 'CP',    label: 'Guardia Costiera',    icon: 'anchor',  color: '#30d158', digitRequired: true },
   { prefix: 'GABBIA',label: 'Guardia Costiera',    icon: 'anchor',  color: '#30d158' },
   { prefix: 'GABBN', label: 'Guardia Costiera',    icon: 'anchor',  color: '#30d158' },
 
@@ -46,15 +46,23 @@ export const SPECIAL_CALLSIGNS = [
   // Frecce Tricolori / pattuglie acrobatiche
   { prefix: 'PONY',  label: 'Frecce Tricolori',    icon: 'airplane',color: '#30d158' },
 
-  // Marina Militare
+  // Marina Militare — MM seguito da cifra (es. MM61951); MMA ecc. → esclusi
   { prefix: 'MARINA',label: 'Marina Militare',     icon: 'anchor',  color: '#5ac8fa' },
-  { prefix: 'MM',    label: 'Marina Militare',     icon: 'anchor',  color: '#5ac8fa' },
+  { prefix: 'MM',    label: 'Marina Militare',     icon: 'anchor',  color: '#5ac8fa', digitRequired: true },
 ]
 
 export function getSpecial(flight) {
   if (!flight) return null
   const f = flight.trim().toUpperCase()
-  return SPECIAL_CALLSIGNS.find(s => f.startsWith(s.prefix)) ?? null
+  return SPECIAL_CALLSIGNS.find(s => {
+    if (!f.startsWith(s.prefix)) return false
+    // Per i prefissi corti ambigui il carattere successivo deve essere una cifra
+    if (s.digitRequired) {
+      const nextChar = f[s.prefix.length]
+      if (nextChar !== undefined && !/\d/.test(nextChar)) return false
+    }
+    return true
+  }) ?? null
 }
 
 // MDI SVG paths

@@ -35,11 +35,22 @@ SPECIAL_PREFIXES = [
     "PONY",
 ]
 
+# Prefissi corti che richiedono una cifra subito dopo per evitare falsi positivi:
+# CC → CCM = Air Corsica | MM → MMA ecc. | CP → CPA = Cathay Pacific | VF → VFR ecc.
+_DIGIT_REQUIRED = {"CC", "MM", "CP", "VF"}
+
 def is_special(flight):
     if not flight:
         return False
     f = flight.upper().strip()
-    return any(f.startswith(p) for p in SPECIAL_PREFIXES)
+    for p in SPECIAL_PREFIXES:
+        if f.startswith(p):
+            if p in _DIGIT_REQUIRED:
+                next_ch = f[len(p):len(p)+1]
+                if next_ch and not next_ch.isdigit():
+                    continue
+            return True
+    return False
 
 def is_pegaso(flight):
     if not flight:
