@@ -21,8 +21,8 @@ RETAIN_AIRCRAFT_S = int(os.getenv("RETAIN_AIRCRAFT_HOURS", "24")) * 3600
 POLL_S = 2
 GAP_S = 600
 
-RECEIVER_LAT = float(os.getenv("RECEIVER_LAT", "0"))
-RECEIVER_LON = float(os.getenv("RECEIVER_LON", "0"))
+RECEIVER_LAT = float(os.getenv("RECEIVER_LAT") or "0")
+RECEIVER_LON = float(os.getenv("RECEIVER_LON") or "0")
 SITE_URL = os.getenv("SITE_URL", "")  # es. https://hydraplane.nove1uno.uk
 
 SPECIAL_PREFIXES = [
@@ -541,20 +541,26 @@ def session_info(session_id: str):
 
 @app.get("/api/known")
 def known():
+    """Restituisce l'ultima posizione nota per ogni aereo nel DB.
+    Usa MAX(ts) aggregate di SQLite: quando presente, gli altri campi
+    non aggregati prendono il valore dalla riga con il ts massimo."""
     con = get_db()
     rows = con.execute("""
-        SELECT p.hex, p.flight,
-               p.lat AS last_lat, p.lon AS last_lon,
-               p.alt_baro AS last_alt_baro, p.gs AS last_gs,
-               p.track AS last_track, p.squawk AS last_squawk,
-               p.category AS last_category, p.ts AS last_seen,
-               p.session_id AS last_session_id,
-               cnt.points
-        FROM positions p
-        INNER JOIN (SELECT hex, MAX(ts) AS max_ts, COUNT(*) AS points FROM positions GROUP BY hex) cnt
-          ON p.hex = cnt.hex AND p.ts = cnt.max_ts
-        GROUP BY p.hex
-        ORDER BY p.ts DESC
+        SELECT hex,
+               flight,
+               lat          AS last_lat,
+               lon          AS last_lon,
+               alt_baro     AS last_alt_baro,
+               gs           AS last_gs,
+               track        AS last_track,
+               squawk       AS last_squawk,
+               category     AS last_category,
+               MAX(ts)      AS last_seen,
+               session_id   AS last_session_id,
+               COUNT(*)     AS points
+        FROM positions
+        GROUP BY hex
+        ORDER BY last_seen DESC
     """).fetchall()
     con.close()
     return [dict(r) for r in rows]
