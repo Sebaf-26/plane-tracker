@@ -145,7 +145,6 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS idx_hex_ts    ON positions (hex, ts);
         CREATE INDEX IF NOT EXISTS idx_ts        ON positions (ts);
-        CREATE INDEX IF NOT EXISTS idx_session   ON positions (session_id);
 
         CREATE TABLE IF NOT EXISTS aircraft_info (
             hex              TEXT PRIMARY KEY,
@@ -190,6 +189,12 @@ def init_db():
     """)
     try:
         con.execute("ALTER TABLE positions ADD COLUMN session_id TEXT")
+        con.commit()
+    except Exception:
+        pass  # colonna già esiste
+    # Indice su session_id creato DOPO l'ALTER TABLE (evita "no such column" su DB vecchi)
+    try:
+        con.execute("CREATE INDEX IF NOT EXISTS idx_session ON positions (session_id)")
         con.commit()
     except Exception:
         pass
