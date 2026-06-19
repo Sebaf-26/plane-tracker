@@ -246,6 +246,7 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
 
     if not is_test:
         if not cfg["enabled"] or not cfg["url"]:
+            print(f"[webhook] SKIP {flight}: not enabled or no url", flush=True)
             con.close()
             return
 
@@ -254,6 +255,7 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
         if prefixes:
             f = (flight or "").upper()
             if not any(f.startswith(p.upper()) for p in prefixes):
+                print(f"[webhook] SKIP {flight}: non in prefixes {prefixes}", flush=True)
                 con.close()
                 return
 
@@ -264,6 +266,7 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
             if lat is not None and lon is not None and RECEIVER_LAT and RECEIVER_LON:
                 dist = haversine_km(RECEIVER_LAT, RECEIVER_LON, lat, lon)
                 if dist > cfg["max_distance_km"]:
+                    print(f"[webhook] SKIP {flight}: fuori geofence ({dist:.1f}km > {cfg['max_distance_km']}km)", flush=True)
                     con.close()
                     return
 
@@ -274,6 +277,7 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
             (hex_code, now_s - cooldown_s)
         ).fetchone()
         if already:
+            print(f"[webhook] SKIP {flight}: cooldown attivo (hex={hex_code})", flush=True)
             con.close()
             return
 
@@ -350,11 +354,13 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
     if not url:
         return
 
+    print(f"[webhook] FIRE {flight} (hex={hex_code}, session={session_id}) → {url}", flush=True)
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(url, json=payload)
-    except Exception:
-        pass
+            r = await client.post(url, json=payload)
+        print(f"[webhook] risposta HTTP {r.status_code}", flush=True)
+    except Exception as e:
+        print(f"[webhook] ERRORE invio: {e}", flush=True)
 
 # ---------------------------------------------------------------------------
 # Poller
@@ -391,6 +397,7 @@ async def poller():
                             new_sid = make_session_id(hex_code, now_s)
                             _current_session[hex_code] = new_sid
                             if is_special(flight_str):
+                                print(f"[poller] SPECIALE rilevato: {flight_str} ({hex_code}), nuova sessione {new_sid}", flush=True)
                                 new_sessions.append((hex_code, flight_str, new_sid, a))
                         _last_ts[hex_code] = now_s
                         sid = _current_session[hex_code]
