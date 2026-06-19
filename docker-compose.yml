@@ -38,6 +38,9 @@ services:
       ULTRAFEEDER_URL: http://ultrafeeder/data/aircraft.json
       DB_PATH: /data/hydra.db
       RETAIN_MINUTES: "${RETAIN_MINUTES:-10}"
+      RECEIVER_LAT: ${READSB_LAT}
+      RECEIVER_LON: ${READSB_LON}
+      SITE_URL: "${SITE_URL:-}"
     volumes:
       - ${DB_HOST_PATH:-./data}:/data
     depends_on:

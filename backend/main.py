@@ -1,13 +1,17 @@
 import asyncio
 import hashlib
+import json
+import math
 import sqlite3
 import time
 import os
 import contextlib
+from datetime import datetime, timezone
 
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 ULTRAFEEDER_URL = os.getenv("ULTRAFEEDER_URL", "http://ultrafeeder/data/aircraft.json")
 DB_PATH = os.getenv("DB_PATH", "/data/hydra.db")
@@ -15,7 +19,11 @@ RETAIN_S = int(os.getenv("RETAIN_MINUTES", "10")) * 60
 RETAIN_HEMS_S = 7 * 24 * 3600
 RETAIN_AIRCRAFT_S = int(os.getenv("RETAIN_AIRCRAFT_HOURS", "24")) * 3600
 POLL_S = 2
-GAP_S = 600  # gap > 10min = nuova sessione
+GAP_S = 600
+
+RECEIVER_LAT = float(os.getenv("RECEIVER_LAT", "0"))
+RECEIVER_LON = float(os.getenv("RECEIVER_LON", "0"))
+SITE_URL = os.getenv("SITE_URL", "")  # es. https://hydraplane.nove1uno.uk
 
 SPECIAL_PREFIXES = [
     "PEGASO", "PGSO", "PELIKA", "PELIC", "INSUB", "GRIFO", "NIKO", "HEMS",
@@ -27,20 +35,19 @@ SPECIAL_PREFIXES = [
     "PONY",
 ]
 
-def is_special(flight: str | None) -> bool:
+def is_special(flight):
     if not flight:
         return False
     f = flight.upper().strip()
     return any(f.startswith(p) for p in SPECIAL_PREFIXES)
 
-def is_pegaso(flight: str | None) -> bool:
+def is_pegaso(flight):
     if not flight:
         return False
     f = flight.upper().strip()
     return f.startswith("PEGASO") or f.startswith("PGSO")
 
-def make_session_id(hex_code: str, ts: int) -> str:
-    """Genera un ID sessione di 7 caratteri tipo 'a3k7m2p'."""
+def make_session_id(hex_code, ts):
     raw = f"{hex_code}:{ts}"
     h = int(hashlib.md5(raw.encode()).hexdigest()[:8], 16)
     chars = '0123456789abcdefghjkmnpqrstvwxyz'
@@ -50,19 +57,45 @@ def make_session_id(hex_code: str, ts: int) -> str:
         h //= 32
     return result
 
+def haversine_km(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    return R * 2 * math.asin(math.sqrt(a))
+
 # ---------------------------------------------------------------------------
 # DB
 # ---------------------------------------------------------------------------
 
-def get_db() -> sqlite3.Connection:
+def get_db():
     con = sqlite3.connect(DB_PATH, check_same_thread=False)
     con.row_factory = sqlite3.Row
     return con
 
+DEFAULT_WEBHOOK_CONFIG = {
+    "enabled": 0,
+    "url": "",
+    "cooldown_min": 30,
+    "max_distance_km": None,
+    "trigger_new_session": 1,
+    "callsign_prefixes": "[]",
+    "include_callsign": 1,
+    "include_hex": 1,
+    "include_position": 1,
+    "include_altitude": 1,
+    "include_speed": 1,
+    "include_track": 0,
+    "include_squawk": 0,
+    "include_photo": 1,
+    "include_map_link": 1,
+    "include_session_id": 1,
+    "include_distance": 1,
+}
+
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     con = get_db()
-    # WAL mode: permette letture concorrenti durante le scritture
     con.execute("PRAGMA journal_mode=WAL")
     con.executescript("""
         CREATE TABLE IF NOT EXISTS positions (
@@ -102,6 +135,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_hex_ts    ON positions (hex, ts);
         CREATE INDEX IF NOT EXISTS idx_ts        ON positions (ts);
         CREATE INDEX IF NOT EXISTS idx_session   ON positions (session_id);
+
         CREATE TABLE IF NOT EXISTS aircraft_info (
             hex              TEXT PRIMARY KEY,
             registration     TEXT,
@@ -114,55 +148,206 @@ def init_db():
             url_photo_thumb  TEXT,
             fetched_at       INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS webhook_config (
+            id                  INTEGER PRIMARY KEY DEFAULT 1,
+            enabled             INTEGER NOT NULL DEFAULT 0,
+            url                 TEXT NOT NULL DEFAULT '',
+            cooldown_min        INTEGER NOT NULL DEFAULT 30,
+            max_distance_km     REAL,
+            trigger_new_session INTEGER NOT NULL DEFAULT 1,
+            callsign_prefixes   TEXT NOT NULL DEFAULT '[]',
+            include_callsign    INTEGER NOT NULL DEFAULT 1,
+            include_hex         INTEGER NOT NULL DEFAULT 1,
+            include_position    INTEGER NOT NULL DEFAULT 1,
+            include_altitude    INTEGER NOT NULL DEFAULT 1,
+            include_speed       INTEGER NOT NULL DEFAULT 1,
+            include_track       INTEGER NOT NULL DEFAULT 0,
+            include_squawk      INTEGER NOT NULL DEFAULT 0,
+            include_photo       INTEGER NOT NULL DEFAULT 1,
+            include_map_link    INTEGER NOT NULL DEFAULT 1,
+            include_session_id  INTEGER NOT NULL DEFAULT 1,
+            include_distance    INTEGER NOT NULL DEFAULT 1
+        );
+
+        CREATE TABLE IF NOT EXISTS webhook_sent (
+            hex        TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            sent_at    INTEGER NOT NULL,
+            PRIMARY KEY (hex, session_id)
+        );
     """)
-    # Aggiungi colonna session_id se non esiste
     try:
         con.execute("ALTER TABLE positions ADD COLUMN session_id TEXT")
         con.commit()
     except Exception:
-        pass  # colonna già esiste
+        pass
+    # Inserisci config di default se non esiste
+    con.execute("""
+        INSERT OR IGNORE INTO webhook_config (id) VALUES (1)
+    """)
+    con.commit()
     con.close()
 
 async def _migrate_session_ids_bg():
-    """Assegna session_id alle posizioni storiche in background (a chunk)
-    per non bloccare il DB al startup."""
     CHUNK = 5000
-    await asyncio.sleep(5)  # lascia partire il poller prima
+    await asyncio.sleep(5)
     while True:
         con = get_db()
         rows = con.execute(
             "SELECT id, hex, ts FROM positions WHERE session_id IS NULL ORDER BY hex, ts LIMIT ?",
             (CHUNK,)
         ).fetchall()
-
         if not rows:
             con.close()
-            break  # migrazione completata
-
+            break
         current_hex = None
         current_sid = None
         last_ts = None
         updates = []
-
         for row in rows:
             if row["hex"] != current_hex or (last_ts is not None and row["ts"] - last_ts > GAP_S):
                 current_sid = make_session_id(row["hex"], row["ts"])
                 current_hex = row["hex"]
             last_ts = row["ts"]
             updates.append((current_sid, row["id"]))
-
         con.executemany("UPDATE positions SET session_id = ? WHERE id = ?", updates)
         con.commit()
         con.close()
-        await asyncio.sleep(0.1)  # respira tra un chunk e l'altro
+        await asyncio.sleep(0.1)
 
 # ---------------------------------------------------------------------------
-# Poller — traccia sessione corrente per ogni aereo
+# Webhook
 # ---------------------------------------------------------------------------
 
-_db: sqlite3.Connection | None = None
-_current_session: dict[str, str] = {}   # hex -> session_id corrente
-_last_ts: dict[str, int] = {}           # hex -> ultimo timestamp
+async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=False):
+    """Controlla le regole e spara il webhook se le condizioni sono soddisfatte."""
+    con = get_db()
+    cfg = con.execute("SELECT * FROM webhook_config WHERE id = 1").fetchone()
+    if not cfg:
+        con.close()
+        return
+
+    if not is_test:
+        if not cfg["enabled"] or not cfg["url"]:
+            con.close()
+            return
+
+        # Filtro callsign
+        prefixes = json.loads(cfg["callsign_prefixes"] or "[]")
+        if prefixes:
+            f = (flight or "").upper()
+            if not any(f.startswith(p.upper()) for p in prefixes):
+                con.close()
+                return
+
+        # Filtro geofence
+        if cfg["max_distance_km"]:
+            lat = aircraft.get("lat")
+            lon = aircraft.get("lon")
+            if lat is not None and lon is not None and RECEIVER_LAT and RECEIVER_LON:
+                dist = haversine_km(RECEIVER_LAT, RECEIVER_LON, lat, lon)
+                if dist > cfg["max_distance_km"]:
+                    con.close()
+                    return
+
+        # Cooldown
+        cooldown_s = cfg["cooldown_min"] * 60
+        already = con.execute(
+            "SELECT sent_at FROM webhook_sent WHERE hex = ? AND sent_at > ?",
+            (hex_code, now_s - cooldown_s)
+        ).fetchone()
+        if already:
+            con.close()
+            return
+
+    # Build payload
+    payload = {
+        "evento": "aereo_speciale_rilevato",
+        "timestamp": datetime.fromtimestamp(now_s, tz=timezone.utc).isoformat(),
+    }
+
+    if cfg["include_session_id"] or is_test:
+        payload["session_id"] = session_id
+    if cfg["include_callsign"] or is_test:
+        payload["callsign"] = (flight or "").strip() or hex_code.upper()
+    if cfg["include_hex"] or is_test:
+        payload["hex"] = hex_code.upper()
+
+    lat = aircraft.get("lat")
+    lon = aircraft.get("lon")
+
+    if (cfg["include_position"] or is_test) and lat is not None:
+        payload["lat"] = lat
+        payload["lon"] = lon
+
+    if (cfg["include_distance"] or is_test) and lat is not None and RECEIVER_LAT and RECEIVER_LON:
+        payload["distanza_km"] = round(haversine_km(RECEIVER_LAT, RECEIVER_LON, lat, lon), 1)
+
+    alt = aircraft.get("alt_baro")
+    if (cfg["include_altitude"] or is_test) and alt is not None and alt != "ground":
+        payload["quota_ft"] = int(alt)
+        payload["quota_m"] = int(alt * 0.3048)
+
+    gs = aircraft.get("gs")
+    if (cfg["include_speed"] or is_test) and gs is not None:
+        payload["velocita_kt"] = round(gs)
+        payload["velocita_kmh"] = round(gs * 1.852)
+
+    if (cfg["include_track"] or is_test) and aircraft.get("track") is not None:
+        payload["rotta"] = round(aircraft["track"])
+
+    if (cfg["include_squawk"] or is_test) and aircraft.get("squawk"):
+        payload["squawk"] = aircraft["squawk"]
+
+    if (cfg["include_map_link"] or is_test) and SITE_URL and session_id:
+        payload["mappa_url"] = f"{SITE_URL.rstrip('/')}/#s={session_id}"
+
+    # Foto da cache aircraft_info
+    if cfg["include_photo"] or is_test:
+        photo_row = con.execute(
+            "SELECT url_photo, url_photo_thumb, registration, type, owner FROM aircraft_info WHERE hex = ?",
+            (hex_code.lower(),)
+        ).fetchone()
+        if photo_row:
+            if photo_row["url_photo"]:
+                payload["foto_url"] = photo_row["url_photo"]
+            if photo_row["url_photo_thumb"]:
+                payload["foto_thumb_url"] = photo_row["url_photo_thumb"]
+            if photo_row["registration"]:
+                payload["registrazione"] = photo_row["registration"]
+            if photo_row["type"]:
+                payload["tipo_aereo"] = photo_row["type"]
+            if photo_row["owner"]:
+                payload["operatore"] = photo_row["owner"]
+
+    if not is_test:
+        # Registra invio per cooldown
+        con.execute(
+            "INSERT OR REPLACE INTO webhook_sent (hex, session_id, sent_at) VALUES (?, ?, ?)",
+            (hex_code, session_id, now_s)
+        )
+        con.commit()
+
+    con.close()
+
+    url = cfg["url"] if not is_test else cfg["url"]
+    if not url:
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(url, json=payload)
+    except Exception:
+        pass
+
+# ---------------------------------------------------------------------------
+# Poller
+# ---------------------------------------------------------------------------
+
+_db = None
+_current_session = {}
+_last_ts = {}
 
 async def poller():
     global _db
@@ -177,51 +362,38 @@ async def poller():
                     aircraft = data.get("aircraft", [])
 
                     rows = []
+                    new_sessions = []  # (hex, flight, session_id, aircraft_data) da notificare
+
                     for a in aircraft:
                         if a.get("lat") is None or a.get("lon") is None:
                             continue
                         flight_str = (a.get("flight") or "").strip() or None
                         hex_code = a.get("hex")
 
-                        # Nuova sessione se gap > GAP_S o prima volta
                         last = _last_ts.get(hex_code)
-                        if last is None or now_s - last > GAP_S:
-                            _current_session[hex_code] = make_session_id(hex_code, now_s)
+                        is_new_session = last is None or now_s - last > GAP_S
+                        if is_new_session:
+                            new_sid = make_session_id(hex_code, now_s)
+                            _current_session[hex_code] = new_sid
+                            if is_special(flight_str):
+                                new_sessions.append((hex_code, flight_str, new_sid, a))
                         _last_ts[hex_code] = now_s
                         sid = _current_session[hex_code]
 
                         rows.append((
-                            now_s,
-                            hex_code,
-                            flight_str,
+                            now_s, hex_code, flight_str,
                             1 if is_pegaso(flight_str) else 0,
                             sid,
-                            a.get("lat"),
-                            a.get("lon"),
+                            a.get("lat"), a.get("lon"),
                             a.get("alt_baro") if a.get("alt_baro") != "ground" else 0,
-                            a.get("alt_geom"),
-                            a.get("gs"),
-                            a.get("ias"),
-                            a.get("tas"),
-                            a.get("mach"),
-                            a.get("track"),
-                            a.get("mag_heading"),
-                            a.get("true_heading"),
-                            a.get("baro_rate"),
-                            a.get("geom_rate"),
+                            a.get("alt_geom"), a.get("gs"), a.get("ias"), a.get("tas"),
+                            a.get("mach"), a.get("track"), a.get("mag_heading"),
+                            a.get("true_heading"), a.get("baro_rate"), a.get("geom_rate"),
                             a.get("squawk"),
                             a.get("emergency") if a.get("emergency") not in (None, "none") else None,
-                            a.get("category"),
-                            a.get("nav_altitude_mcp"),
-                            a.get("nav_altitude_fms"),
-                            a.get("nav_heading"),
-                            a.get("roll"),
-                            a.get("rssi"),
-                            a.get("messages"),
-                            a.get("wind_speed"),
-                            a.get("wind_dir"),
-                            a.get("oat"),
-                            a.get("tat"),
+                            a.get("category"), a.get("nav_altitude_mcp"), a.get("nav_altitude_fms"),
+                            a.get("nav_heading"), a.get("roll"), a.get("rssi"), a.get("messages"),
+                            a.get("wind_speed"), a.get("wind_dir"), a.get("oat"), a.get("tat"),
                         ))
 
                     if rows:
@@ -232,8 +404,7 @@ async def poller():
                                 track, mag_heading, true_heading,
                                 baro_rate, geom_rate, squawk, emergency,
                                 category, nav_alt_mcp, nav_alt_fms, nav_heading,
-                                roll, rssi, messages,
-                                wind_speed, wind_dir, oat, tat
+                                roll, rssi, messages, wind_speed, wind_dir, oat, tat
                             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """, rows)
 
@@ -243,23 +414,27 @@ async def poller():
                           AND hex IN (
                               SELECT hex FROM positions
                               WHERE is_hems = 0
-                              GROUP BY hex
-                              HAVING MAX(ts) < ?
+                              GROUP BY hex HAVING MAX(ts) < ?
                           )
                     """, (now_s - RETAIN_AIRCRAFT_S,))
                     _db.execute("""
                         DELETE FROM positions
                         WHERE is_hems = 0
-                          AND ts < (
-                              SELECT MAX(ts) FROM positions p2
-                              WHERE p2.hex = positions.hex
-                          ) - ?
+                          AND ts < (SELECT MAX(ts) FROM positions p2 WHERE p2.hex = positions.hex) - ?
                     """, (RETAIN_S,))
-                    _db.execute("""
-                        DELETE FROM positions
-                        WHERE ts < ? AND is_hems = 1
-                    """, (now_s - RETAIN_HEMS_S,))
+                    _db.execute(
+                        "DELETE FROM positions WHERE ts < ? AND is_hems = 1",
+                        (now_s - RETAIN_HEMS_S,)
+                    )
+                    _db.execute(
+                        "DELETE FROM webhook_sent WHERE sent_at < ?",
+                        (now_s - 7 * 24 * 3600,)
+                    )
                     _db.commit()
+
+                    # Webhook per nuove sessioni speciali (fuori dal lock DB)
+                    for (hx, fl, sid, ac) in new_sessions:
+                        asyncio.create_task(fire_webhook(hx, fl, sid, ac, now_s))
 
             except Exception:
                 pass
@@ -287,150 +462,114 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+# ---------------------------------------------------------------------------
+# Endpoints — trail / history / sessions
+# ---------------------------------------------------------------------------
 
 @app.get("/api/trail/{hex_code}")
 def trail(hex_code: str):
     con = get_db()
-    rows = con.execute("""
-        SELECT ts, lat, lon, track
-        FROM positions
-        WHERE hex = ? AND lat IS NOT NULL
-        ORDER BY ts ASC
-    """, (hex_code.lower(),)).fetchall()
+    rows = con.execute(
+        "SELECT ts, lat, lon, track FROM positions WHERE hex = ? AND lat IS NOT NULL ORDER BY ts ASC",
+        (hex_code.lower(),)
+    ).fetchall()
     con.close()
     return [dict(r) for r in rows]
-
 
 @app.get("/api/history/{hex_code}")
 def history(hex_code: str):
     con = get_db()
     rows = con.execute("""
-        SELECT ts, flight, lat, lon,
-               alt_baro, alt_geom, gs, ias, tas, mach,
-               track, mag_heading, true_heading,
-               baro_rate, geom_rate, squawk, emergency,
-               category, nav_alt_mcp, nav_alt_fms, nav_heading,
-               roll, rssi, messages, wind_speed, wind_dir, oat, tat
-        FROM positions
-        WHERE hex = ?
-        ORDER BY ts ASC
+        SELECT ts, flight, lat, lon, alt_baro, alt_geom, gs, ias, tas, mach,
+               track, mag_heading, true_heading, baro_rate, geom_rate, squawk, emergency,
+               category, nav_alt_mcp, nav_alt_fms, nav_heading, roll, rssi, messages,
+               wind_speed, wind_dir, oat, tat
+        FROM positions WHERE hex = ? ORDER BY ts ASC
     """, (hex_code.lower(),)).fetchall()
     con.close()
     return [dict(r) for r in rows]
-
 
 @app.get("/api/sessions/{hex_code}")
 def sessions(hex_code: str):
-    """Elenco sessioni per un aereo, dalla più recente."""
     con = get_db()
     rows = con.execute("""
-        SELECT session_id,
-               MIN(ts) AS first_ts,
-               MAX(ts) AS last_ts,
-               COUNT(*) AS points,
-               MAX(flight) AS flight,
-               MAX(is_hems) AS is_hems
+        SELECT session_id, MIN(ts) AS first_ts, MAX(ts) AS last_ts,
+               COUNT(*) AS points, MAX(flight) AS flight, MAX(is_hems) AS is_hems
         FROM positions
         WHERE hex = ? AND session_id IS NOT NULL
-        GROUP BY session_id
-        ORDER BY first_ts DESC
+        GROUP BY session_id ORDER BY first_ts DESC
     """, (hex_code.lower(),)).fetchall()
     con.close()
     return [dict(r) for r in rows]
-
 
 @app.get("/api/session/{session_id}/trail")
 def session_trail(session_id: str):
     con = get_db()
-    rows = con.execute("""
-        SELECT ts, lat, lon, track
-        FROM positions
-        WHERE session_id = ? AND lat IS NOT NULL
-        ORDER BY ts ASC
-    """, (session_id,)).fetchall()
+    rows = con.execute(
+        "SELECT ts, lat, lon, track FROM positions WHERE session_id = ? AND lat IS NOT NULL ORDER BY ts ASC",
+        (session_id,)
+    ).fetchall()
     con.close()
     return [dict(r) for r in rows]
-
 
 @app.get("/api/session/{session_id}/history")
 def session_history(session_id: str):
     con = get_db()
     rows = con.execute("""
-        SELECT ts, flight, lat, lon,
-               alt_baro, alt_geom, gs, ias, tas, mach,
-               track, mag_heading, true_heading,
-               baro_rate, geom_rate, squawk, emergency,
-               category, nav_alt_mcp, nav_alt_fms, nav_heading,
-               roll, rssi, messages, wind_speed, wind_dir, oat, tat
-        FROM positions
-        WHERE session_id = ?
-        ORDER BY ts ASC
+        SELECT ts, flight, lat, lon, alt_baro, alt_geom, gs, ias, tas, mach,
+               track, mag_heading, true_heading, baro_rate, geom_rate, squawk, emergency,
+               category, nav_alt_mcp, nav_alt_fms, nav_heading, roll, rssi, messages,
+               wind_speed, wind_dir, oat, tat
+        FROM positions WHERE session_id = ? ORDER BY ts ASC
     """, (session_id,)).fetchall()
     con.close()
     return [dict(r) for r in rows]
 
-
 @app.get("/api/session/{session_id}/info")
 def session_info(session_id: str):
-    """Metadati di una sessione (hex, flight, first/last ts, punti)."""
     con = get_db()
     row = con.execute("""
         SELECT hex, MAX(flight) AS flight,
                MIN(ts) AS first_ts, MAX(ts) AS last_ts,
-               COUNT(*) AS points,
-               MAX(lat) AS last_lat, MAX(lon) AS last_lon,
-               MAX(is_hems) AS is_hems
-        FROM positions
-        WHERE session_id = ?
+               COUNT(*) AS points, MAX(is_hems) AS is_hems
+        FROM positions WHERE session_id = ?
     """, (session_id,)).fetchone()
     con.close()
     if not row or not row["hex"]:
         raise HTTPException(status_code=404, detail="Session not found")
     return dict(row)
 
-
 @app.get("/api/known")
 def known():
     con = get_db()
     rows = con.execute("""
-        SELECT p.hex,
-               p.flight,
-               p.lat        AS last_lat,
-               p.lon        AS last_lon,
-               p.alt_baro   AS last_alt_baro,
-               p.gs         AS last_gs,
-               p.track      AS last_track,
-               p.squawk     AS last_squawk,
-               p.category   AS last_category,
-               p.ts         AS last_seen,
+        SELECT p.hex, p.flight,
+               p.lat AS last_lat, p.lon AS last_lon,
+               p.alt_baro AS last_alt_baro, p.gs AS last_gs,
+               p.track AS last_track, p.squawk AS last_squawk,
+               p.category AS last_category, p.ts AS last_seen,
                p.session_id AS last_session_id,
-               COUNT(*)     AS points
+               cnt.points
         FROM positions p
-        INNER JOIN (
-            SELECT hex, MAX(ts) AS max_ts FROM positions GROUP BY hex
-        ) latest ON p.hex = latest.hex AND p.ts = latest.max_ts
+        INNER JOIN (SELECT hex, MAX(ts) AS max_ts, COUNT(*) AS points FROM positions GROUP BY hex) cnt
+          ON p.hex = cnt.hex AND p.ts = cnt.max_ts
         GROUP BY p.hex
         ORDER BY p.ts DESC
     """).fetchall()
     con.close()
     return [dict(r) for r in rows]
 
-
 @app.get("/api/stats")
 def stats():
     con = get_db()
     row = con.execute("""
-        SELECT COUNT(*) as rows,
-               MIN(ts) as oldest,
-               MAX(ts) as newest,
-               COUNT(DISTINCT hex) as aircraft
+        SELECT COUNT(*) as rows, MIN(ts) as oldest, MAX(ts) as newest, COUNT(DISTINCT hex) as aircraft
         FROM positions
     """).fetchone()
     con.close()
     now = int(time.time())
     return {
-        "rows": row["rows"],
-        "aircraft": row["aircraft"],
+        "rows": row["rows"], "aircraft": row["aircraft"],
         "oldest_s": now - row["oldest"] if row["oldest"] else None,
         "newest_s": now - row["newest"] if row["newest"] else None,
     }
@@ -440,7 +579,6 @@ async def aircraft_info(hex_code: str):
     hex_code = hex_code.lower()
     cache_ttl = 30 * 24 * 3600
     now_s = int(time.time())
-
     con = get_db()
     row = con.execute(
         "SELECT * FROM aircraft_info WHERE hex = ? AND fetched_at > ?",
@@ -449,7 +587,6 @@ async def aircraft_info(hex_code: str):
     if row:
         con.close()
         return dict(row)
-
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(f"https://api.adsbdb.com/v0/aircraft/{hex_code}",
@@ -472,7 +609,6 @@ async def aircraft_info(hex_code: str):
             info = {"hex": hex_code, "fetched_at": now_s}
     except Exception:
         info = {"hex": hex_code, "fetched_at": now_s}
-
     con.execute("""
         INSERT OR REPLACE INTO aircraft_info
         (hex, registration, type, icao_type, manufacturer, owner, country, url_photo, url_photo_thumb, fetched_at)
@@ -482,6 +618,90 @@ async def aircraft_info(hex_code: str):
     con.close()
     return info
 
+# ---------------------------------------------------------------------------
+# Endpoints — webhook config
+# ---------------------------------------------------------------------------
+
+@app.get("/api/webhook/config")
+def get_webhook_config():
+    con = get_db()
+    row = con.execute("SELECT * FROM webhook_config WHERE id = 1").fetchone()
+    con.close()
+    if not row:
+        return DEFAULT_WEBHOOK_CONFIG
+    d = dict(row)
+    d["callsign_prefixes"] = json.loads(d.get("callsign_prefixes") or "[]")
+    return d
+
+class WebhookConfigIn(BaseModel):
+    enabled: bool = False
+    url: str = ""
+    cooldown_min: int = 30
+    max_distance_km: float | None = None
+    trigger_new_session: bool = True
+    callsign_prefixes: list[str] = []
+    include_callsign: bool = True
+    include_hex: bool = True
+    include_position: bool = True
+    include_altitude: bool = True
+    include_speed: bool = True
+    include_track: bool = False
+    include_squawk: bool = False
+    include_photo: bool = True
+    include_map_link: bool = True
+    include_session_id: bool = True
+    include_distance: bool = True
+
+@app.put("/api/webhook/config")
+def save_webhook_config(cfg: WebhookConfigIn):
+    con = get_db()
+    con.execute("""
+        INSERT OR REPLACE INTO webhook_config (
+            id, enabled, url, cooldown_min, max_distance_km, trigger_new_session,
+            callsign_prefixes,
+            include_callsign, include_hex, include_position, include_altitude, include_speed,
+            include_track, include_squawk, include_photo, include_map_link,
+            include_session_id, include_distance
+        ) VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        int(cfg.enabled), cfg.url, cfg.cooldown_min, cfg.max_distance_km,
+        int(cfg.trigger_new_session), json.dumps(cfg.callsign_prefixes),
+        int(cfg.include_callsign), int(cfg.include_hex), int(cfg.include_position),
+        int(cfg.include_altitude), int(cfg.include_speed), int(cfg.include_track),
+        int(cfg.include_squawk), int(cfg.include_photo), int(cfg.include_map_link),
+        int(cfg.include_session_id), int(cfg.include_distance),
+    ))
+    con.commit()
+    con.close()
+    return {"ok": True}
+
+@app.post("/api/webhook/test")
+async def test_webhook():
+    """Manda un payload di test al webhook configurato."""
+    con = get_db()
+    cfg = con.execute("SELECT * FROM webhook_config WHERE id = 1").fetchone()
+    con.close()
+    if not cfg or not cfg["url"]:
+        raise HTTPException(status_code=400, detail="Nessun URL webhook configurato")
+
+    fake_aircraft = {
+        "lat": RECEIVER_LAT + 0.05,
+        "lon": RECEIVER_LON + 0.05,
+        "alt_baro": 2500,
+        "gs": 120,
+        "track": 270,
+        "squawk": "7000",
+    }
+    now_s = int(time.time())
+
+    try:
+        await fire_webhook(
+            "abc123", "PEGASO51", "test123",
+            fake_aircraft, now_s, is_test=True
+        )
+        return {"ok": True, "message": "Payload di test inviato"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 def health():

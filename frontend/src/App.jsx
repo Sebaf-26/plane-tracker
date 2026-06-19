@@ -13,6 +13,7 @@ import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub, haversineKm, form
 import Compass from './components/Compass'
 import { squawkInfo } from './squawk'
 import { getSpecial } from './specialCallsigns'
+import WebhookSettings from './components/WebhookSettings'
 
 const RECEIVER_LAT = import.meta.env.VITE_LAT ? parseFloat(import.meta.env.VITE_LAT) : 43.9
 const RECEIVER_LON = import.meta.env.VITE_LON ? parseFloat(import.meta.env.VITE_LON) : 10.2
@@ -519,6 +520,7 @@ export default function App() {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 900
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
+  const [showWebhookSettings, setShowWebhookSettings] = useState(false)
 
   // Carica sessione da URL hash al mount
   useEffect(() => {
@@ -720,8 +722,20 @@ export default function App() {
         <div style={{ ...card, padding: '16px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3 }}>HydraPlanes</div>
-            <div style={{ fontSize: 11, color: error ? 'var(--red)' : 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-              {error ? '⚠ offline' : timeStr}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 11, color: error ? 'var(--red)' : 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+                {error ? '⚠ offline' : timeStr}
+              </div>
+              <button
+                onClick={() => setShowWebhookSettings(true)}
+                title="Impostazioni webhook"
+                style={{
+                  width: 28, height: 28, borderRadius: 8, border: 'none',
+                  background: 'rgba(255,255,255,0.07)',
+                  color: 'var(--text3)', fontSize: 14, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >🔔</button>
             </div>
           </div>
           <div style={{ ...cardInner, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -789,6 +803,10 @@ export default function App() {
           </button>
         </div>
       </aside>
+
+      {showWebhookSettings && (
+        <WebhookSettings onClose={() => setShowWebhookSettings(false)} />
+      )}
 
       {showHistoryPanel && (
         <HistoryPanel
