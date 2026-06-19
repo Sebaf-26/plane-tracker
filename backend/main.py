@@ -62,6 +62,8 @@ def get_db() -> sqlite3.Connection:
 def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     con = get_db()
+    # WAL mode: permette letture concorrenti durante le scritture
+    con.execute("PRAGMA journal_mode=WAL")
     con.executescript("""
         CREATE TABLE IF NOT EXISTS positions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -113,38 +115,46 @@ def init_db():
             fetched_at       INTEGER NOT NULL
         );
     """)
-    # Migrazione: aggiungi session_id alle posizioni esistenti senza
+    # Aggiungi colonna session_id se non esiste
     try:
         con.execute("ALTER TABLE positions ADD COLUMN session_id TEXT")
         con.commit()
     except Exception:
         pass  # colonna già esiste
-
-    _migrate_session_ids(con)
-    con.commit()
     con.close()
 
-def _migrate_session_ids(con):
-    """Assegna session_id alle posizioni esistenti che non ce l'hanno."""
-    rows = con.execute(
-        "SELECT id, hex, ts FROM positions WHERE session_id IS NULL ORDER BY hex, ts"
-    ).fetchall()
-    if not rows:
-        return
+async def _migrate_session_ids_bg():
+    """Assegna session_id alle posizioni storiche in background (a chunk)
+    per non bloccare il DB al startup."""
+    CHUNK = 5000
+    await asyncio.sleep(5)  # lascia partire il poller prima
+    while True:
+        con = get_db()
+        rows = con.execute(
+            "SELECT id, hex, ts FROM positions WHERE session_id IS NULL ORDER BY hex, ts LIMIT ?",
+            (CHUNK,)
+        ).fetchall()
 
-    current_hex = None
-    current_sid = None
-    last_ts = None
-    updates = []
+        if not rows:
+            con.close()
+            break  # migrazione completata
 
-    for row in rows:
-        if row["hex"] != current_hex or (last_ts is not None and row["ts"] - last_ts > GAP_S):
-            current_sid = make_session_id(row["hex"], row["ts"])
-            current_hex = row["hex"]
-        last_ts = row["ts"]
-        updates.append((current_sid, row["id"]))
+        current_hex = None
+        current_sid = None
+        last_ts = None
+        updates = []
 
-    con.executemany("UPDATE positions SET session_id = ? WHERE id = ?", updates)
+        for row in rows:
+            if row["hex"] != current_hex or (last_ts is not None and row["ts"] - last_ts > GAP_S):
+                current_sid = make_session_id(row["hex"], row["ts"])
+                current_hex = row["hex"]
+            last_ts = row["ts"]
+            updates.append((current_sid, row["id"]))
+
+        con.executemany("UPDATE positions SET session_id = ? WHERE id = ?", updates)
+        con.commit()
+        con.close()
+        await asyncio.sleep(0.1)  # respira tra un chunk e l'altro
 
 # ---------------------------------------------------------------------------
 # Poller — traccia sessione corrente per ogni aereo
@@ -263,11 +273,14 @@ async def poller():
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    task = asyncio.create_task(poller())
+    task_poll = asyncio.create_task(poller())
+    task_mig  = asyncio.create_task(_migrate_session_ids_bg())
     yield
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task
+    task_poll.cancel()
+    task_mig.cancel()
+    for t in (task_poll, task_mig):
+        with contextlib.suppress(asyncio.CancelledError):
+            await t
     if _db:
         _db.close()
 
