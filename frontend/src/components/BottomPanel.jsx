@@ -3,7 +3,7 @@ import HistoryChart from './HistoryChart'
 import { squawkInfo } from '../squawk'
 import { formatAlt, formatAltSub, formatSpeed, formatSpeedSub } from '../utils'
 
-export default function BottomPanel({ plane, onClose }) {
+export default function BottomPanel({ plane, sessionId, onClose }) {
   const ref = useRef(null)
 
   // Impedisce che i click sul pannello propaghino alla mappa
@@ -85,7 +85,7 @@ export default function BottomPanel({ plane, onClose }) {
       </div>
 
       {/* Charts */}
-      <HistoryChart hex={plane.hex} />
+      <HistoryChart hex={plane.hex} sessionId={sessionId} />
     </div>
   )
 }

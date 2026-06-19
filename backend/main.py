@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import sqlite3
 import time
 import os
@@ -11,16 +12,43 @@ from fastapi.middleware.cors import CORSMiddleware
 ULTRAFEEDER_URL = os.getenv("ULTRAFEEDER_URL", "http://ultrafeeder/data/aircraft.json")
 DB_PATH = os.getenv("DB_PATH", "/data/hydra.db")
 RETAIN_S = int(os.getenv("RETAIN_MINUTES", "10")) * 60
-RETAIN_HEMS_S = 7 * 24 * 3600  # 1 settimana per PEGASO
-# Dopo quanto tempo eliminiamo un aereo che non si vede più (default 24h)
+RETAIN_HEMS_S = 7 * 24 * 3600
 RETAIN_AIRCRAFT_S = int(os.getenv("RETAIN_AIRCRAFT_HOURS", "24")) * 3600
 POLL_S = 2
+GAP_S = 600  # gap > 10min = nuova sessione
+
+SPECIAL_PREFIXES = [
+    "PEGASO", "PGSO", "PELIKA", "PELIC", "INSUB", "GRIFO", "NIKO", "HEMS",
+    "VOLPE", "VOLP", "POLI", "FIAMMA", "FIAA", "CC",
+    "DRAGO", "DRG", "VF", "VVF",
+    "KOALA", "KLA", "CP", "GABBIA", "GABBN",
+    "ICARO", "RESCUE", "AMI",
+    "MARINA", "MM",
+    "PONY",
+]
+
+def is_special(flight: str | None) -> bool:
+    if not flight:
+        return False
+    f = flight.upper().strip()
+    return any(f.startswith(p) for p in SPECIAL_PREFIXES)
 
 def is_pegaso(flight: str | None) -> bool:
     if not flight:
         return False
     f = flight.upper().strip()
     return f.startswith("PEGASO") or f.startswith("PGSO")
+
+def make_session_id(hex_code: str, ts: int) -> str:
+    """Genera un ID sessione di 7 caratteri tipo 'a3k7m2p'."""
+    raw = f"{hex_code}:{ts}"
+    h = int(hashlib.md5(raw.encode()).hexdigest()[:8], 16)
+    chars = '0123456789abcdefghjkmnpqrstvwxyz'
+    result = ''
+    for _ in range(7):
+        result = chars[h % 32] + result
+        h //= 32
+    return result
 
 # ---------------------------------------------------------------------------
 # DB
@@ -41,6 +69,7 @@ def init_db():
             hex         TEXT NOT NULL,
             flight      TEXT,
             is_hems     INTEGER NOT NULL DEFAULT 0,
+            session_id  TEXT,
             lat         REAL,
             lon         REAL,
             alt_baro    REAL,
@@ -68,8 +97,9 @@ def init_db():
             oat         REAL,
             tat         REAL
         );
-        CREATE INDEX IF NOT EXISTS idx_hex_ts ON positions (hex, ts);
-        CREATE INDEX IF NOT EXISTS idx_ts     ON positions (ts);
+        CREATE INDEX IF NOT EXISTS idx_hex_ts    ON positions (hex, ts);
+        CREATE INDEX IF NOT EXISTS idx_ts        ON positions (ts);
+        CREATE INDEX IF NOT EXISTS idx_session   ON positions (session_id);
         CREATE TABLE IF NOT EXISTS aircraft_info (
             hex              TEXT PRIMARY KEY,
             registration     TEXT,
@@ -83,14 +113,46 @@ def init_db():
             fetched_at       INTEGER NOT NULL
         );
     """)
+    # Migrazione: aggiungi session_id alle posizioni esistenti senza
+    try:
+        con.execute("ALTER TABLE positions ADD COLUMN session_id TEXT")
+        con.commit()
+    except Exception:
+        pass  # colonna già esiste
+
+    _migrate_session_ids(con)
     con.commit()
     con.close()
 
+def _migrate_session_ids(con):
+    """Assegna session_id alle posizioni esistenti che non ce l'hanno."""
+    rows = con.execute(
+        "SELECT id, hex, ts FROM positions WHERE session_id IS NULL ORDER BY hex, ts"
+    ).fetchall()
+    if not rows:
+        return
+
+    current_hex = None
+    current_sid = None
+    last_ts = None
+    updates = []
+
+    for row in rows:
+        if row["hex"] != current_hex or (last_ts is not None and row["ts"] - last_ts > GAP_S):
+            current_sid = make_session_id(row["hex"], row["ts"])
+            current_hex = row["hex"]
+        last_ts = row["ts"]
+        updates.append((current_sid, row["id"]))
+
+    con.executemany("UPDATE positions SET session_id = ? WHERE id = ?", updates)
+
 # ---------------------------------------------------------------------------
-# Poller
+# Poller — traccia sessione corrente per ogni aereo
 # ---------------------------------------------------------------------------
 
 _db: sqlite3.Connection | None = None
+_current_session: dict[str, str] = {}   # hex -> session_id corrente
+_last_ts: dict[str, int] = {}           # hex -> ultimo timestamp
 
 async def poller():
     global _db
@@ -109,11 +171,21 @@ async def poller():
                         if a.get("lat") is None or a.get("lon") is None:
                             continue
                         flight_str = (a.get("flight") or "").strip() or None
+                        hex_code = a.get("hex")
+
+                        # Nuova sessione se gap > GAP_S o prima volta
+                        last = _last_ts.get(hex_code)
+                        if last is None or now_s - last > GAP_S:
+                            _current_session[hex_code] = make_session_id(hex_code, now_s)
+                        _last_ts[hex_code] = now_s
+                        sid = _current_session[hex_code]
+
                         rows.append((
                             now_s,
-                            a.get("hex"),
+                            hex_code,
                             flight_str,
                             1 if is_pegaso(flight_str) else 0,
+                            sid,
                             a.get("lat"),
                             a.get("lon"),
                             a.get("alt_baro") if a.get("alt_baro") != "ground" else 0,
@@ -145,20 +217,16 @@ async def poller():
                     if rows:
                         _db.executemany("""
                             INSERT INTO positions (
-                                ts, hex, flight, is_hems, lat, lon,
+                                ts, hex, flight, is_hems, session_id, lat, lon,
                                 alt_baro, alt_geom, gs, ias, tas, mach,
                                 track, mag_heading, true_heading,
                                 baro_rate, geom_rate, squawk, emergency,
                                 category, nav_alt_mcp, nav_alt_fms, nav_heading,
                                 roll, rssi, messages,
                                 wind_speed, wind_dir, oat, tat
-                            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                         """, rows)
 
-                    # Per ogni aereo non-HEMS: tieni solo gli ultimi RETAIN_S secondi
-                    # del SUO ultimo avvistamento (non rispetto a "adesso").
-                    # Così gli aerei scomparsi mantengono la loro traccia.
-                    # Dopo RETAIN_AIRCRAFT_S dall'ultimo avvistamento, elimina tutto.
                     _db.execute("""
                         DELETE FROM positions
                         WHERE is_hems = 0
@@ -177,7 +245,6 @@ async def poller():
                               WHERE p2.hex = positions.hex
                           ) - ?
                     """, (RETAIN_S,))
-                    # HEMS: 1 settimana
                     _db.execute("""
                         DELETE FROM positions
                         WHERE ts < ? AND is_hems = 1
@@ -210,7 +277,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/api/trail/{hex_code}")
 def trail(hex_code: str):
-    """Ultime posizioni (lat/lon/ts) per disegnare la traccia."""
     con = get_db()
     rows = con.execute("""
         SELECT ts, lat, lon, track
@@ -224,7 +290,6 @@ def trail(hex_code: str):
 
 @app.get("/api/history/{hex_code}")
 def history(hex_code: str):
-    """Tutti i campi per i grafici."""
     con = get_db()
     rows = con.execute("""
         SELECT ts, flight, lat, lon,
@@ -241,9 +306,78 @@ def history(hex_code: str):
     return [dict(r) for r in rows]
 
 
+@app.get("/api/sessions/{hex_code}")
+def sessions(hex_code: str):
+    """Elenco sessioni per un aereo, dalla più recente."""
+    con = get_db()
+    rows = con.execute("""
+        SELECT session_id,
+               MIN(ts) AS first_ts,
+               MAX(ts) AS last_ts,
+               COUNT(*) AS points,
+               MAX(flight) AS flight,
+               MAX(is_hems) AS is_hems
+        FROM positions
+        WHERE hex = ? AND session_id IS NOT NULL
+        GROUP BY session_id
+        ORDER BY first_ts DESC
+    """, (hex_code.lower(),)).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/session/{session_id}/trail")
+def session_trail(session_id: str):
+    con = get_db()
+    rows = con.execute("""
+        SELECT ts, lat, lon, track
+        FROM positions
+        WHERE session_id = ? AND lat IS NOT NULL
+        ORDER BY ts ASC
+    """, (session_id,)).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/session/{session_id}/history")
+def session_history(session_id: str):
+    con = get_db()
+    rows = con.execute("""
+        SELECT ts, flight, lat, lon,
+               alt_baro, alt_geom, gs, ias, tas, mach,
+               track, mag_heading, true_heading,
+               baro_rate, geom_rate, squawk, emergency,
+               category, nav_alt_mcp, nav_alt_fms, nav_heading,
+               roll, rssi, messages, wind_speed, wind_dir, oat, tat
+        FROM positions
+        WHERE session_id = ?
+        ORDER BY ts ASC
+    """, (session_id,)).fetchall()
+    con.close()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/session/{session_id}/info")
+def session_info(session_id: str):
+    """Metadati di una sessione (hex, flight, first/last ts, punti)."""
+    con = get_db()
+    row = con.execute("""
+        SELECT hex, MAX(flight) AS flight,
+               MIN(ts) AS first_ts, MAX(ts) AS last_ts,
+               COUNT(*) AS points,
+               MAX(lat) AS last_lat, MAX(lon) AS last_lon,
+               MAX(is_hems) AS is_hems
+        FROM positions
+        WHERE session_id = ?
+    """, (session_id,)).fetchone()
+    con.close()
+    if not row or not row["hex"]:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return dict(row)
+
+
 @app.get("/api/known")
 def known():
-    """Lista aerei con storico nel DB, con ultima posizione nota."""
     con = get_db()
     rows = con.execute("""
         SELECT p.hex,
@@ -256,6 +390,7 @@ def known():
                p.squawk     AS last_squawk,
                p.category   AS last_category,
                p.ts         AS last_seen,
+               p.session_id AS last_session_id,
                COUNT(*)     AS points
         FROM positions p
         INNER JOIN (
@@ -289,7 +424,6 @@ def stats():
 
 @app.get("/api/aircraft/{hex_code}")
 async def aircraft_info(hex_code: str):
-    """Lookup registrazione/tipo da adsbdb.com con cache 30 giorni."""
     hex_code = hex_code.lower()
     cache_ttl = 30 * 24 * 3600
     now_s = int(time.time())
@@ -303,7 +437,6 @@ async def aircraft_info(hex_code: str):
         con.close()
         return dict(row)
 
-    # Fetch da adsbdb
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(f"https://api.adsbdb.com/v0/aircraft/{hex_code}",

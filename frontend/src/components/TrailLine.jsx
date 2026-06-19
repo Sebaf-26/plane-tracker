@@ -6,8 +6,15 @@ const SEGMENTS = 6
 export default function TrailLine({ points, selected }) {
   if (!points || points.length < 2) return null
 
+  // Filtra punti con coordinate invalide per evitare "Invariant failed" di Leaflet
+  const valid = points.filter(p =>
+    p.lat != null && p.lon != null &&
+    isFinite(p.lat) && isFinite(p.lon)
+  )
+  if (valid.length < 2) return null
+
   // Limita alle ultime 3 sessioni per evitare crash con storici lunghi (PEGASO 7gg)
-  const allSessions = splitSessions(points)
+  const allSessions = splitSessions(valid)
   const sessions = allSessions.slice(-3)
 
   return <>

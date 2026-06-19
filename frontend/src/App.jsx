@@ -45,7 +45,6 @@ function StatTile({ label, value, sub, accent, tooltip }) {
 
   return (
     <div style={{ ...cardInner, padding: '13px 14px' }}>
-      {/* Label row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
         <span style={{ fontSize: 10, color: 'var(--text3)', letterSpacing: 0.3 }}>{label}</span>
         {tooltip && (
@@ -67,7 +66,6 @@ function StatTile({ label, value, sub, accent, tooltip }) {
       </div>
       {!empty && sub && <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{sub}</div>}
 
-      {/* Info popup — fixed position, never clipped */}
       {popupPos && tooltip && typeof document !== 'undefined' && (
         <>
           <div style={{ position: 'fixed', inset: 0, zIndex: 9500 }} onClick={() => setPopupPos(null)} />
@@ -170,7 +168,6 @@ function FullDetail({ plane, onClose }) {
         }}>×</button>
       </div>
 
-      {/* Aircraft info from adsbdb */}
       {acInfo && (acInfo.registration || acInfo.type || acInfo.owner) && (
         <div style={{
           ...cardInner, padding: '10px 12px', marginBottom: 10,
@@ -199,7 +196,6 @@ function FullDetail({ plane, onClose }) {
         </div>
       )}
 
-      {/* Compass + quick stats */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'start', marginBottom: 10 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <StatTile label="Altitude" value={formatAlt(plane.alt_baro)} sub={formatAltSub(plane.alt_baro)} tooltip="Quota barometrica: misurata dalla pressione atmosferica, usata per la separazione del traffico aereo." />
@@ -216,8 +212,7 @@ function FullDetail({ plane, onClose }) {
 
         const sections = [
           {
-            title: 'Quota',
-            icon: '↕',
+            title: 'Quota', icon: '↕',
             tiles: [
               { label: 'Alt. barometrica', value: formatAlt(plane.alt_baro), sub: formatAltSub(plane.alt_baro), tooltip: 'Quota barometrica: misurata dalla pressione atmosferica, usata per la separazione del traffico aereo.' },
               { label: 'Alt. geometrica', value: formatAlt(plane.alt_geom), sub: formatAltSub(plane.alt_geom), tooltip: 'Quota GPS geometrica: misurata dai satelliti, più precisa dell\'altitudine barometrica.' },
@@ -226,8 +221,7 @@ function FullDetail({ plane, onClose }) {
             ],
           },
           {
-            title: 'Velocità',
-            icon: '⚡',
+            title: 'Velocità', icon: '⚡',
             tiles: [
               { label: 'GS', value: formatSpeed(plane.gs), sub: formatSpeedSub(plane.gs), tooltip: 'Ground Speed: velocità dell\'aereo rispetto al suolo (include l\'effetto del vento).' },
               { label: 'IAS', value: plane.ias != null ? `${plane.ias} kt` : null, sub: plane.ias != null ? `${Math.round(plane.ias * 1.852)} km/h` : null, tooltip: 'Indicated Airspeed: velocità indicata dallo strumento di bordo (non corregge densità aria).' },
@@ -236,8 +230,7 @@ function FullDetail({ plane, onClose }) {
             ],
           },
           {
-            title: 'Navigazione',
-            icon: '🧭',
+            title: 'Navigazione', icon: '🧭',
             tiles: [
               { label: 'Heading vero', value: plane.true_heading != null ? `${Math.round(plane.true_heading)}°` : null, tooltip: 'Direzione in cui punta il muso dell\'aereo rispetto al Nord geografico (poli).' },
               { label: 'Heading mag.', value: plane.mag_heading != null ? `${Math.round(plane.mag_heading)}°` : null, tooltip: 'Direzione in cui punta il muso rispetto al Nord magnetico (usato nelle carte aeronautiche).' },
@@ -246,8 +239,7 @@ function FullDetail({ plane, onClose }) {
             ],
           },
           {
-            title: 'Posizione',
-            icon: '📍',
+            title: 'Posizione', icon: '📍',
             tiles: [
               { label: 'Dist. orizzontale', value: formatDist(groundKm), tooltip: 'Distanza orizzontale (proiezione a terra) tra il receiver e l\'aereo.' },
               { label: 'Dist. reale', value: formatDist(slant), tooltip: 'Distanza in linea d\'aria 3D calcolata con il teorema di Pitagora: √(dist_orizzontale² + quota²).' },
@@ -256,8 +248,7 @@ function FullDetail({ plane, onClose }) {
             ],
           },
           {
-            title: 'Meteo',
-            icon: '🌡',
+            title: 'Meteo', icon: '🌡',
             tiles: [
               { label: 'Vento', value: plane.wind_speed != null ? `${plane.wind_speed} kt` : null, sub: plane.wind_dir != null ? `dir. ${plane.wind_dir}°` : null, tooltip: 'Velocità e direzione del vento stimata dall\'aereo (differenza tra TAS e GS).' },
               { label: 'OAT', value: plane.oat != null ? `${plane.oat} °C` : null, tooltip: 'Outside Air Temperature: temperatura esterna rilevata dai sensori dell\'aereo.' },
@@ -265,8 +256,7 @@ function FullDetail({ plane, onClose }) {
             ],
           },
           {
-            title: 'Segnale',
-            icon: '📡',
+            title: 'Segnale', icon: '📡',
             tiles: [
               { label: 'RSSI', value: plane.rssi != null ? `${plane.rssi.toFixed(1)} dB` : null, tooltip: 'Received Signal Strength Indicator: potenza del segnale ricevuto. Più vicino allo 0 = segnale più forte.' },
               { label: 'Messaggi', value: plane.messages?.toLocaleString() ?? null, tooltip: 'Numero totale di messaggi ADS-B ricevuti da questo aereo da quando è nel range.' },
@@ -291,6 +281,82 @@ function FullDetail({ plane, onClose }) {
   )
 }
 
+function fmtDate(ts) {
+  return new Date(ts * 1000).toLocaleString('it-IT', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+}
+
+function fmtDuration(startTs, endTs) {
+  const s = endTs - startTs
+  if (s < 60) return `${s}s`
+  const m = Math.round(s / 60)
+  if (m < 60) return `${m}min`
+  const h = Math.floor(m / 60)
+  const rem = m % 60
+  return rem ? `${h}h ${rem}min` : `${h}h`
+}
+
+// Pannello sessioni per un singolo hex (aerei speciali)
+function SessionsList({ hex, selectedSessionId, onSelectSession }) {
+  const [sessions, setSessions] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`/api/sessions/${hex}`)
+      .then(r => r.json())
+      .then(data => { setSessions(data); setLoading(false) })
+      .catch(() => { setSessions([]); setLoading(false) })
+  }, [hex])
+
+  if (loading) return (
+    <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text3)' }}>Caricamento…</div>
+  )
+  if (!sessions?.length) return (
+    <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text3)' }}>Nessuna sessione trovata.</div>
+  )
+
+  return (
+    <div style={{ paddingBottom: 4 }}>
+      {sessions.map(s => {
+        const isSelected = selectedSessionId === s.session_id
+        return (
+          <button
+            key={s.session_id}
+            onClick={() => onSelectSession(s.session_id, hex)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              width: '100%', padding: '9px 12px',
+              background: isSelected ? 'rgba(250,193,35,0.12)' : 'transparent',
+              border: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+              cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font)',
+              gap: 8,
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+              <span style={{ fontSize: 11, color: isSelected ? 'var(--accent)' : 'var(--text)', fontWeight: 600 }}>
+                {fmtDate(s.first_ts)}
+              </span>
+              <span style={{ fontSize: 10, color: 'var(--text3)' }}>
+                {fmtDuration(s.first_ts, s.last_ts)} · {s.points} punti
+              </span>
+            </div>
+            <div style={{
+              fontFamily: 'var(--font-mono)', fontSize: 10,
+              color: isSelected ? 'var(--accent)' : 'rgba(255,255,255,0.3)',
+              background: isSelected ? 'rgba(250,193,35,0.15)' : 'rgba(255,255,255,0.06)',
+              padding: '3px 7px', borderRadius: 6, flexShrink: 0,
+              border: isSelected ? '1px solid rgba(250,193,35,0.3)' : '1px solid transparent',
+            }}>
+              {s.session_id}
+            </div>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function groupHistorical(planes) {
   const groups = {}
   for (const p of planes) {
@@ -299,19 +365,19 @@ function groupHistorical(planes) {
       const cs = p.flight?.trim().toUpperCase() ?? ''
       return cs.length >= 3 ? cs.slice(0, 3) : (cs || p.hex.toUpperCase())
     })()
-    if (!groups[key]) groups[key] = { label: key, color: sp?.color ?? null, planes: [] }
+    if (!groups[key]) groups[key] = { label: key, color: sp?.color ?? null, isSpecial: !!sp, planes: [] }
     groups[key].planes.push(p)
   }
   return Object.values(groups).sort((a, b) => {
-    const aSpec = a.color != null
-    const bSpec = b.color != null
-    if (aSpec !== bSpec) return aSpec ? -1 : 1
+    if (a.isSpecial !== b.isSpecial) return a.isSpecial ? -1 : 1
     return a.label.localeCompare(b.label)
   })
 }
 
-function HistoryPanel({ historicalPlanes, selectedHex, onSelect, onClose, receiverLat, receiverLon }) {
+function HistoryPanel({ historicalPlanes, selectedHex, selectedSessionId, onSelect, onSelectSession, onClose, receiverLat, receiverLon }) {
   const groups = groupHistorical(historicalPlanes)
+  const [expandedHex, setExpandedHex] = useState(null)
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9000,
@@ -319,7 +385,7 @@ function HistoryPanel({ historicalPlanes, selectedHex, onSelect, onClose, receiv
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }} onClick={onClose}>
       <div style={{
-        width: 380, maxHeight: '80vh',
+        width: 400, maxHeight: '85vh',
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden', borderRadius: 20,
         background: '#111827',
@@ -334,6 +400,27 @@ function HistoryPanel({ historicalPlanes, selectedHex, onSelect, onClose, receiv
             fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>×</button>
         </div>
+
+        {selectedSessionId && (
+          <div style={{
+            margin: '0 12px 10px',
+            padding: '8px 12px', borderRadius: 10,
+            background: 'rgba(250,193,35,0.1)', border: '1px solid rgba(250,193,35,0.25)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>
+              Sessione attiva:
+            </span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)', fontWeight: 700 }}>
+              {selectedSessionId}
+            </span>
+            <button onClick={() => onSelectSession(null, null)} style={{
+              background: 'none', border: 'none', color: 'var(--text3)',
+              fontSize: 11, cursor: 'pointer', fontFamily: 'var(--font)',
+            }}>✕ rimuovi</button>
+          </div>
+        )}
+
         <div style={{ overflowY: 'auto', flex: 1, padding: '0 12px 16px' }}>
           {groups.map(g => (
             <div key={g.label} style={{ marginBottom: 12 }}>
@@ -346,14 +433,72 @@ function HistoryPanel({ historicalPlanes, selectedHex, onSelect, onClose, receiv
               }}>
                 {g.label} ({g.planes.length})
               </div>
-              <FlightList
-                planes={[]}
-                historicalPlanes={g.planes}
-                selected={selectedHex}
-                onSelect={onSelect}
-                receiverLat={receiverLat}
-                receiverLon={receiverLon}
-              />
+
+              {g.isSpecial
+                ? g.planes.map(p => (
+                    <div key={p.hex} style={{ marginBottom: 4 }}>
+                      {/* Riga piano speciale */}
+                      <button
+                        onClick={() => setExpandedHex(prev => prev === p.hex ? null : p.hex)}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          width: '100%', padding: '9px 10px',
+                          background: expandedHex === p.hex ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.03)',
+                          border: '1px solid rgba(255,255,255,0.07)',
+                          borderRadius: expandedHex === p.hex ? '8px 8px 0 0' : 8,
+                          cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font)',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: g.color ?? 'var(--text)' }}>
+                            {p.flight?.trim() || p.hex.toUpperCase()}
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text3)', fontFamily: 'var(--font-mono)', marginTop: 1 }}>
+                            {p.hex.toUpperCase()}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 10, color: 'var(--text3)' }}>Sessioni</span>
+                          <span style={{
+                            fontSize: 10, color: 'var(--text3)',
+                            transform: expandedHex === p.hex ? 'rotate(0deg)' : 'rotate(-90deg)',
+                            display: 'inline-block', transition: 'transform 0.2s',
+                          }}>▾</span>
+                        </div>
+                      </button>
+
+                      {/* Lista sessioni espansa */}
+                      {expandedHex === p.hex && (
+                        <div style={{
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.07)',
+                          borderTop: 'none',
+                          borderRadius: '0 0 8px 8px',
+                          overflow: 'hidden',
+                        }}>
+                          <SessionsList
+                            hex={p.hex}
+                            selectedSessionId={selectedSessionId}
+                            onSelectSession={(sid, hex) => {
+                              onSelectSession(sid, hex)
+                              onClose()
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ))
+                : (
+                  <FlightList
+                    planes={[]}
+                    historicalPlanes={g.planes}
+                    selected={selectedHex}
+                    onSelect={(hex) => { onSelect(hex); onClose() }}
+                    receiverLat={receiverLat}
+                    receiverLon={receiverLon}
+                  />
+                )
+              }
             </div>
           ))}
         </div>
@@ -366,6 +511,8 @@ export default function App() {
   const { planes, lastUpdate, error } = usePlanes()
   const known = useKnown()
   const [selectedHex, setSelectedHex] = useState(null)
+  const [selectedSession, setSelectedSession] = useState(null)  // { id, hex } | null
+  const [sessionTrail, setSessionTrail] = useState([])
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
   const [showHistorical, setShowHistorical] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -373,7 +520,47 @@ export default function App() {
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
 
-  // Planes that have DB history but are no longer in the live feed
+  // Carica sessione da URL hash al mount
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash.startsWith('#s=')) {
+      const sid = hash.slice(3)
+      loadSession(sid)
+    }
+  }, [])
+
+  function loadSession(sid) {
+    fetch(`/api/session/${sid}/info`)
+      .then(r => r.ok ? r.json() : null)
+      .then(info => {
+        if (!info) return
+        setSelectedSession({ id: sid, hex: info.hex })
+        setSelectedHex(info.hex)
+        window.location.hash = `s=${sid}`
+        // Carica trail della sessione
+        return fetch(`/api/session/${sid}/trail`).then(r => r.json())
+      })
+      .then(pts => { if (pts) setSessionTrail(pts) })
+      .catch(() => {})
+  }
+
+  function handleSelectSession(sid, hex) {
+    if (!sid) {
+      // rimuovi selezione sessione
+      setSelectedSession(null)
+      setSessionTrail([])
+      history.pushState('', document.title, window.location.pathname + window.location.search)
+      return
+    }
+    setSelectedSession({ id: sid, hex })
+    setSelectedHex(hex)
+    window.location.hash = `s=${sid}`
+    fetch(`/api/session/${sid}/trail`)
+      .then(r => r.json())
+      .then(pts => setSessionTrail(pts))
+      .catch(() => setSessionTrail([]))
+  }
+
   const liveHexSet = new Set(planes.map((p) => p.hex))
   const historicalPlanes = known
     .filter((k) => !liveHexSet.has(k.hex) && k.last_lat != null && k.last_lon != null)
@@ -409,9 +596,15 @@ export default function App() {
 
   function handleSelect(hex) {
     setSelectedHex((prev) => (prev === hex ? null : hex))
+    // se si seleziona un piano diverso da quello della sessione, deseleziona sessione
+    setSelectedSession(prev => (prev && prev.hex !== hex) ? null : prev)
+    if (!selectedSession || selectedSession.hex !== hex) setSessionTrail([])
   }
 
   const timeStr = lastUpdate?.toLocaleTimeString('it-IT', { hour12: false }) ?? '--:--:--'
+
+  // Trail da mostrare: sessione specifica se selezionata, altrimenti trail live
+  const trailPoints = selectedSession ? sessionTrail : (selectedPlane ? getTrail(selectedPlane.hex) : [])
 
   return (
     <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh', overflow: 'hidden' }}>
@@ -425,15 +618,13 @@ export default function App() {
             maxZoom={19}
           />
           <RangeCircles lat={RECEIVER_LAT} lon={RECEIVER_LON} />
-          {/* Home marker */}
           <CircleMarker
             center={[RECEIVER_LAT, RECEIVER_LON]}
             radius={7}
             pathOptions={{ color: '#fac123', weight: 2, fillColor: '#fac123', fillOpacity: 0.25 }}
           />
-          {/* Trail solo per l'aereo selezionato */}
           {selectedPlane && (
-            <TrailLine points={getTrail(selectedPlane.hex)} selected={true} />
+            <TrailLine points={trailPoints} selected={true} />
           )}
           {planes.map((p) => (
             <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
@@ -444,7 +635,7 @@ export default function App() {
           <FlyTo plane={selectedPlane} />
         </MapContainer>
 
-        {/* Toggle storico sulla mappa */}
+        {/* Toggle storico */}
         <button
           onClick={() => setShowHistorical(v => !v)}
           style={{
@@ -461,10 +652,29 @@ export default function App() {
           🕓 Storico {showHistorical ? 'ON' : 'OFF'}
         </button>
 
-        {/* Bottom panel grafici */}
-        <BottomPanel plane={selectedPlane} onClose={() => setSelectedHex(null)} />
+        {/* Badge sessione attiva sulla mappa */}
+        {selectedSession && (
+          <div style={{
+            position: 'absolute', top: 56, right: 16, zIndex: 1100,
+            padding: '5px 11px', borderRadius: 14,
+            background: 'rgba(250,193,35,0.15)',
+            border: '1.5px solid rgba(250,193,35,0.4)',
+            fontSize: 11, fontWeight: 700, color: 'var(--accent)',
+            fontFamily: 'var(--font-mono)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}>
+            <span style={{ fontFamily: 'var(--font)', fontWeight: 400, opacity: 0.7, fontSize: 10 }}>sessione</span>
+            {selectedSession.id}
+          </div>
+        )}
 
-        {/* Mobile toggle button */}
+        <BottomPanel
+          plane={selectedPlane}
+          sessionId={selectedSession?.id}
+          onClose={() => { setSelectedHex(null); setSelectedSession(null); setSessionTrail([]) }}
+        />
+
         {isMobile && (
           <button
             onClick={() => setSidebarOpen(v => !v)}
@@ -480,7 +690,6 @@ export default function App() {
         )}
       </div>
 
-      {/* Sidebar — desktop: fixed column | mobile: bottom sheet overlay */}
       {(!isMobile || sidebarOpen) && isMobile && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.5)' }}
           onClick={() => setSidebarOpen(false)} />
@@ -502,14 +711,12 @@ export default function App() {
         height: '100vh',
       }}>
 
-        {/* Mobile drag handle */}
         {isMobile && (
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4, marginTop: -4 }}>
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
           </div>
         )}
 
-        {/* Header */}
         <div style={{ ...card, padding: '16px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: -0.3 }}>HydraPlanes</div>
@@ -523,14 +730,11 @@ export default function App() {
           </div>
         </div>
 
-        {/* Detail panel (solo quando selezionato dalla lista) */}
         {selectedPlane && (
-          <FullDetail plane={selectedPlane} onClose={() => setSelectedHex(null)} />
+          <FullDetail plane={selectedPlane} onClose={() => { setSelectedHex(null); setSelectedSession(null); setSessionTrail([]) }} />
         )}
 
-        {/* Voli */}
         <div style={{ ...card, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-          {/* Live header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 12px', flexShrink: 0 }}>
             <span style={{ fontSize: 15, fontWeight: 700 }}>Voli live</span>
             {selectedHex && planes.find(p => p.hex === selectedHex) && (
@@ -540,7 +744,6 @@ export default function App() {
               }}>Deseleziona</button>
             )}
           </div>
-          {/* Live list — max 5 rows (~72px each) */}
           <div style={{ overflowY: 'auto', maxHeight: 380, flexShrink: 0 }}>
             <FlightList
               planes={planes}
@@ -552,18 +755,15 @@ export default function App() {
             />
           </div>
 
-          {/* Divider */}
           {historicalPlanes.length > 0 && (
             <div style={{ height: 1, background: 'rgba(255,255,255,0.07)', margin: '4px 16px', flexShrink: 0 }} />
           )}
 
-          {/* Storico recente header */}
           {historicalPlanes.length > 0 && (
             <div style={{ padding: '10px 16px 4px', flexShrink: 0, fontSize: 10, color: 'var(--text3)', letterSpacing: 0.8, textTransform: 'uppercase', fontWeight: 600 }}>
               Storico recente
             </div>
           )}
-          {/* Last 5 historical — fixed, no scroll */}
           {historicalPlanes.length > 0 && (
             <FlightList
               planes={[]}
@@ -575,7 +775,6 @@ export default function App() {
             />
           )}
 
-          {/* Storico button */}
           <button
             onClick={() => setShowHistoryPanel(true)}
             style={{
@@ -591,12 +790,13 @@ export default function App() {
         </div>
       </aside>
 
-      {/* History panel overlay */}
       {showHistoryPanel && (
         <HistoryPanel
           historicalPlanes={historicalPlanes}
           selectedHex={selectedHex}
-          onSelect={(hex) => { handleSelect(hex); setShowHistoryPanel(false) }}
+          selectedSessionId={selectedSession?.id ?? null}
+          onSelect={handleSelect}
+          onSelectSession={handleSelectSession}
           onClose={() => setShowHistoryPanel(false)}
           receiverLat={RECEIVER_LAT}
           receiverLon={RECEIVER_LON}

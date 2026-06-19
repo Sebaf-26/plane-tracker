@@ -27,49 +27,54 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
-export default function HistoryChart({ hex }) {
+function buildChartData(rows, limitPoints) {
+  const limited = limitPoints ? rows.slice(-800) : rows
+  const seen = new Set()
+  const clean = []
+  let prevTs = null
+  const gapTimes = []
+  let sessionIdx = 0
+  for (const r of limited) {
+    if (seen.has(r.ts)) continue
+    seen.add(r.ts)
+    if (prevTs != null && r.ts - prevTs > GAP_S) {
+      clean.push({ ts: r.ts, time: fmt(r.ts), _gap: true, sessionIdx: ++sessionIdx })
+      gapTimes.push(fmt(r.ts))
+    }
+    clean.push({
+      ts: r.ts,
+      time: fmt(r.ts),
+      alt_ft: r.alt_baro != null ? Math.round(r.alt_baro) : null,
+      alt_m:  r.alt_baro != null ? Math.round(r.alt_baro * 0.3048) : null,
+      gs_kt:  r.gs != null ? Math.round(r.gs) : null,
+      gs_kmh: r.gs != null ? Math.round(r.gs * 1.852) : null,
+      baro_rate: r.baro_rate != null ? Math.round(r.baro_rate) : null,
+      sessionIdx,
+    })
+    prevTs = r.ts
+  }
+  return { points: clean, gapTimes }
+}
+
+// sessionId: se presente, carica da /api/session/{id}/history (dati limitati già a una sessione)
+// hex: fallback, carica da /api/history/{hex} (limita a 800 punti per sicurezza)
+export default function HistoryChart({ hex, sessionId }) {
   const [data, setData] = useState({ points: [], gapTimes: [] })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!hex) return
+    const key = sessionId ?? hex
+    if (!key) return
     setLoading(true)
-    fetch(`/api/history/${hex}`)
+    const url = sessionId
+      ? `/api/session/${sessionId}/history`
+      : `/api/history/${hex}`
+    fetch(url)
       .then((r) => r.json())
-      .then((rows) => {
-        // Limita agli ultimi 800 punti per evitare crash con storici lunghi (PEGASO 7gg ecc.)
-        const limited = rows.slice(-800)
-        // Deduplica per timestamp e normalizza
-        const seen = new Set()
-        const clean = []
-        let prevTs = null
-        const gapTimes = []
-        let sessionIdx = 0
-        for (const r of limited) {
-          if (seen.has(r.ts)) continue
-          seen.add(r.ts)
-          if (prevTs != null && r.ts - prevTs > GAP_S) {
-            // inserisci null per spezzare la linea nel grafico
-            clean.push({ ts: r.ts, time: fmt(r.ts), _gap: true, sessionIdx: ++sessionIdx })
-            gapTimes.push(fmt(r.ts))
-          }
-          clean.push({
-            ts: r.ts,
-            time: fmt(r.ts),
-            alt_ft: r.alt_baro != null ? Math.round(r.alt_baro) : null,
-            alt_m:  r.alt_baro != null ? Math.round(r.alt_baro * 0.3048) : null,
-            gs_kt:  r.gs != null ? Math.round(r.gs) : null,
-            gs_kmh: r.gs != null ? Math.round(r.gs * 1.852) : null,
-            baro_rate: r.baro_rate != null ? Math.round(r.baro_rate) : null,
-            sessionIdx,
-          })
-          prevTs = r.ts
-        }
-        setData({ points: clean, gapTimes })
-      })
+      .then((rows) => setData(buildChartData(rows, !sessionId)))
       .catch(() => setData({ points: [], gapTimes: [] }))
       .finally(() => setLoading(false))
-  }, [hex])
+  }, [hex, sessionId])
 
   if (loading) return (
     <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
@@ -94,7 +99,12 @@ export default function HistoryChart({ hex }) {
 
   return (
     <div style={{ marginTop: 16 }}>
-      {/* Altitude chart */}
+      {sessionId && (
+        <div style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>
+          SESSIONE · {sessionId.toUpperCase()}
+        </div>
+      )}
+
       <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, letterSpacing: 0.5 }}>
         ALTITUDINE (ft / m)
       </div>
@@ -115,7 +125,6 @@ export default function HistoryChart({ hex }) {
         </ComposedChart>
       </ResponsiveContainer>
 
-      {/* Speed chart */}
       <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 6, marginTop: 14, letterSpacing: 0.5 }}>
         VELOCITÀ (kt) · RATEO VERTICALE (ft/min)
       </div>
