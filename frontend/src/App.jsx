@@ -637,15 +637,15 @@ export default function App() {
           )}
           {/* Focus mode: se c'è una sessione attiva mostra solo quell'aereo */}
           {selectedSession ? (
-            selectedPlane && (
+            selectedPlane && selectedPlane.lat != null && selectedPlane.lon != null && (
               <PlaneMarker plane={selectedPlane} selected={true} onClick={handleSelect} historical={!!selectedPlane._historical} />
             )
           ) : (
             <>
-              {planes.map((p) => (
+              {planes.filter(p => p.lat != null && p.lon != null && isFinite(p.lat) && isFinite(p.lon)).map((p) => (
                 <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
               ))}
-              {showHistorical && historicalPlanes.map((p) => (
+              {showHistorical && historicalPlanes.filter(p => p.lat != null && p.lon != null && isFinite(p.lat) && isFinite(p.lon)).map((p) => (
                 <PlaneMarker key={`h-${p.hex}`} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} historical={true} />
               ))}
             </>
