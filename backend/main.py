@@ -319,23 +319,22 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
     if (cfg["include_map_link"] or is_test) and SITE_URL and session_id:
         payload["mappa_url"] = f"{SITE_URL.rstrip('/')}/#s={session_id}"
 
-    # Foto da cache aircraft_info
+    # Foto + dati aereo: cache → adsbdb → Planespotters (in cascade)
     if cfg["include_photo"] or is_test:
         photo_row = con.execute(
             "SELECT url_photo, url_photo_thumb, registration, type, owner FROM aircraft_info WHERE hex = ?",
             (hex_code.lower(),)
         ).fetchone()
-        if photo_row:
-            if photo_row["url_photo"]:
-                payload["foto_url"] = photo_row["url_photo"]
-            if photo_row["url_photo_thumb"]:
-                payload["foto_thumb_url"] = photo_row["url_photo_thumb"]
-            if photo_row["registration"]:
-                payload["registrazione"] = photo_row["registration"]
-            if photo_row["type"]:
-                payload["tipo_aereo"] = photo_row["type"]
-            if photo_row["owner"]:
-                payload["operatore"] = photo_row["owner"]
+        if photo_row and photo_row["url_photo"]:
+            # già in cache con foto
+            payload["foto_url"]       = photo_row["url_photo"]
+            payload["foto_thumb_url"] = photo_row["url_photo_thumb"]
+            if photo_row["registration"]: payload["registrazione"] = photo_row["registration"]
+            if photo_row["type"]:         payload["tipo_aereo"]    = photo_row["type"]
+            if photo_row["owner"]:        payload["operatore"]     = photo_row["owner"]
+        else:
+            # fetch adsbdb + planespotters in background (non blocca il webhook)
+            asyncio.create_task(_fetch_and_cache_aircraft(hex_code.lower()))
 
     if not is_test:
         # Registra invio per cooldown
@@ -600,6 +599,70 @@ def stats():
         "newest_s": now - row["newest"] if row["newest"] else None,
     }
 
+async def _fetch_and_cache_aircraft(hex_code: str) -> dict:
+    """Fetcha info aereo da adsbdb, poi foto da Planespotters se assente.
+    Salva in cache e restituisce il dict."""
+    now_s = int(time.time())
+    info = {"hex": hex_code, "fetched_at": now_s}
+
+    # 1. adsbdb — dati completi (registrazione, tipo, operatore, foto)
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(f"https://api.adsbdb.com/v0/aircraft/{hex_code}",
+                                 headers={"User-Agent": "HydraPlanes/1.0"})
+        if r.status_code == 200:
+            data = r.json().get("response", {}).get("aircraft") or {}
+            info.update({
+                "registration": data.get("registration"),
+                "type":         data.get("type"),
+                "icao_type":    data.get("icao_type"),
+                "manufacturer": data.get("manufacturer"),
+                "owner":        data.get("registered_owner"),
+                "country":      data.get("registered_owner_country_name"),
+                "url_photo":    data.get("url_photo"),
+                "url_photo_thumb": data.get("url_photo_thumbnail"),
+            })
+    except Exception:
+        pass
+
+    # 2. Planespotters — fallback foto se adsbdb non ce l'ha
+    if not info.get("url_photo"):
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                r = await client.get(
+                    f"https://api.planespotters.net/pub/photos/hex/{hex_code}",
+                    headers={"User-Agent": "HydraPlanes/1.0"}
+                )
+            if r.status_code == 200:
+                photos = r.json().get("photos", [])
+                if photos:
+                    p = photos[0]
+                    info["url_photo"]       = p.get("thumbnail_large", {}).get("src")
+                    info["url_photo_thumb"] = p.get("thumbnail", {}).get("src")
+                    # Prendi registrazione/tipo se non già in info
+                    ac = p.get("aircraft", {})
+                    if not info.get("registration"):
+                        info["registration"] = ac.get("reg") or ac.get("registration")
+                    if not info.get("type"):
+                        info["type"] = ac.get("type")
+        except Exception:
+            pass
+
+    con = get_db()
+    con.execute("""
+        INSERT OR REPLACE INTO aircraft_info
+        (hex, registration, type, icao_type, manufacturer, owner, country,
+         url_photo, url_photo_thumb, fetched_at)
+        VALUES (:hex, :registration, :type, :icao_type, :manufacturer, :owner,
+                :country, :url_photo, :url_photo_thumb, :fetched_at)
+    """, {k: info.get(k) for k in
+          ("hex","registration","type","icao_type","manufacturer","owner",
+           "country","url_photo","url_photo_thumb","fetched_at")})
+    con.commit()
+    con.close()
+    return info
+
+
 @app.get("/api/aircraft/{hex_code}")
 async def aircraft_info(hex_code: str):
     hex_code = hex_code.lower()
@@ -610,39 +673,11 @@ async def aircraft_info(hex_code: str):
         "SELECT * FROM aircraft_info WHERE hex = ? AND fetched_at > ?",
         (hex_code, now_s - cache_ttl)
     ).fetchone()
-    if row:
-        con.close()
-        return dict(row)
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(f"https://api.adsbdb.com/v0/aircraft/{hex_code}",
-                                 headers={"User-Agent": "HydraPlanes/1.0"})
-        if r.status_code == 200:
-            data = r.json().get("response", {}).get("aircraft") or {}
-            info = {
-                "hex": hex_code,
-                "registration": data.get("registration"),
-                "type": data.get("type"),
-                "icao_type": data.get("icao_type"),
-                "manufacturer": data.get("manufacturer"),
-                "owner": data.get("registered_owner"),
-                "country": data.get("registered_owner_country_name"),
-                "url_photo": data.get("url_photo"),
-                "url_photo_thumb": data.get("url_photo_thumbnail"),
-                "fetched_at": now_s,
-            }
-        else:
-            info = {"hex": hex_code, "fetched_at": now_s}
-    except Exception:
-        info = {"hex": hex_code, "fetched_at": now_s}
-    con.execute("""
-        INSERT OR REPLACE INTO aircraft_info
-        (hex, registration, type, icao_type, manufacturer, owner, country, url_photo, url_photo_thumb, fetched_at)
-        VALUES (:hex, :registration, :type, :icao_type, :manufacturer, :owner, :country, :url_photo, :url_photo_thumb, :fetched_at)
-    """, info)
-    con.commit()
     con.close()
-    return info
+    if row and row["url_photo"]:
+        return dict(row)
+    # Non in cache o senza foto → fetch completo
+    return await _fetch_and_cache_aircraft(hex_code)
 
 # ---------------------------------------------------------------------------
 # Endpoints — webhook config
@@ -736,46 +771,8 @@ async def test_webhook():
             "track":    row["track"],
             "squawk":   row["squawk"],
         }
-        # Se non abbiamo ancora la foto in cache, fetchala ora
-        con2 = get_db()
-        cached = con2.execute(
-            "SELECT url_photo FROM aircraft_info WHERE hex = ?", (hex_code.lower(),)
-        ).fetchone()
-        con2.close()
-        if not cached or not cached["url_photo"]:
-            try:
-                async with httpx.AsyncClient(timeout=8) as client:
-                    r = await client.get(
-                        f"https://api.adsbdb.com/v0/aircraft/{hex_code.lower()}",
-                        headers={"User-Agent": "HydraPlanes/1.0"}
-                    )
-                if r.status_code == 200:
-                    data = r.json().get("response", {}).get("aircraft") or {}
-                    now_s2 = int(time.time())
-                    info = {
-                        "hex": hex_code.lower(),
-                        "registration": data.get("registration"),
-                        "type": data.get("type"),
-                        "icao_type": data.get("icao_type"),
-                        "manufacturer": data.get("manufacturer"),
-                        "owner": data.get("registered_owner"),
-                        "country": data.get("registered_owner_country_name"),
-                        "url_photo": data.get("url_photo"),
-                        "url_photo_thumb": data.get("url_photo_thumbnail"),
-                        "fetched_at": now_s2,
-                    }
-                    con3 = get_db()
-                    con3.execute("""
-                        INSERT OR REPLACE INTO aircraft_info
-                        (hex, registration, type, icao_type, manufacturer, owner, country,
-                         url_photo, url_photo_thumb, fetched_at)
-                        VALUES (:hex,:registration,:type,:icao_type,:manufacturer,:owner,
-                                :country,:url_photo,:url_photo_thumb,:fetched_at)
-                    """, info)
-                    con3.commit()
-                    con3.close()
-            except Exception:
-                pass
+        # Assicura che la foto sia in cache (adsbdb → planespotters)
+        await _fetch_and_cache_aircraft(hex_code.lower())
     else:
         # Nessun PEGASO nel DB: usa dati sintetici
         hex_code   = "abc123"
