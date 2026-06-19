@@ -375,9 +375,9 @@ function groupHistorical(planes) {
   })
 }
 
-function HistoryPanel({ historicalPlanes, selectedHex, selectedSessionId, onSelect, onSelectSession, onClose, receiverLat, receiverLon }) {
+function HistoryPanel({ historicalPlanes, selectedHex, selectedSessionId, preExpandHex, onSelect, onSelectSession, onClose, receiverLat, receiverLon }) {
   const groups = groupHistorical(historicalPlanes)
-  const [expandedHex, setExpandedHex] = useState(null)
+  const [expandedHex, setExpandedHex] = useState(preExpandHex ?? null)
 
   return (
     <div style={{
@@ -521,6 +521,7 @@ export default function App() {
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
   const [showWebhookSettings, setShowWebhookSettings] = useState(false)
+  const [historyPanelPreExpand, setHistoryPanelPreExpand] = useState(null)
 
   // Carica sessione da URL hash al mount
   useEffect(() => {
@@ -597,8 +598,14 @@ export default function App() {
     ?? null
 
   function handleSelect(hex) {
+    // Aereo speciale storico → apri pannello sessioni invece di caricare il trail
+    const histPlane = historicalPlanes.find(p => p.hex === hex)
+    if (histPlane && getSpecial(histPlane.flight)) {
+      setHistoryPanelPreExpand(hex)
+      setShowHistoryPanel(true)
+      return
+    }
     setSelectedHex((prev) => (prev === hex ? null : hex))
-    // se si seleziona un piano diverso da quello della sessione, deseleziona sessione
     setSelectedSession(prev => (prev && prev.hex !== hex) ? null : prev)
     if (!selectedSession || selectedSession.hex !== hex) setSessionTrail([])
   }
@@ -628,12 +635,21 @@ export default function App() {
           {selectedPlane && (
             <TrailLine points={trailPoints} selected={true} />
           )}
-          {planes.map((p) => (
-            <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
-          ))}
-          {showHistorical && historicalPlanes.map((p) => (
-            <PlaneMarker key={`h-${p.hex}`} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} historical={true} />
-          ))}
+          {/* Focus mode: se c'è una sessione attiva mostra solo quell'aereo */}
+          {selectedSession ? (
+            selectedPlane && (
+              <PlaneMarker plane={selectedPlane} selected={true} onClick={handleSelect} historical={!!selectedPlane._historical} />
+            )
+          ) : (
+            <>
+              {planes.map((p) => (
+                <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
+              ))}
+              {showHistorical && historicalPlanes.map((p) => (
+                <PlaneMarker key={`h-${p.hex}`} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} historical={true} />
+              ))}
+            </>
+          )}
           <FlyTo plane={selectedPlane} />
         </MapContainer>
 
@@ -654,21 +670,26 @@ export default function App() {
           🕓 Storico {showHistorical ? 'ON' : 'OFF'}
         </button>
 
-        {/* Badge sessione attiva sulla mappa */}
+        {/* Badge sessione attiva + bottone esci dal focus */}
         {selectedSession && (
-          <div style={{
-            position: 'absolute', top: 56, right: 16, zIndex: 1100,
-            padding: '5px 11px', borderRadius: 14,
-            background: 'rgba(250,193,35,0.15)',
-            border: '1.5px solid rgba(250,193,35,0.4)',
-            fontSize: 11, fontWeight: 700, color: 'var(--accent)',
-            fontFamily: 'var(--font-mono)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}>
+          <button
+            onClick={() => { setSelectedSession(null); setSessionTrail([]); setSelectedHex(null); history.pushState('', document.title, window.location.pathname) }}
+            style={{
+              position: 'absolute', top: 56, right: 16, zIndex: 1100,
+              padding: '6px 13px', borderRadius: 14,
+              background: 'rgba(250,193,35,0.15)',
+              border: '1.5px solid rgba(250,193,35,0.4)',
+              fontSize: 11, fontWeight: 700, color: 'var(--accent)',
+              fontFamily: 'var(--font-mono)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex', alignItems: 'center', gap: 8,
+              cursor: 'pointer',
+            }}
+          >
             <span style={{ fontFamily: 'var(--font)', fontWeight: 400, opacity: 0.7, fontSize: 10 }}>sessione</span>
             {selectedSession.id}
-          </div>
+            <span style={{ fontFamily: 'var(--font)', fontWeight: 600, fontSize: 10, opacity: 0.7 }}>✕ esci</span>
+          </button>
         )}
 
         <BottomPanel
@@ -813,9 +834,10 @@ export default function App() {
           historicalPlanes={historicalPlanes}
           selectedHex={selectedHex}
           selectedSessionId={selectedSession?.id ?? null}
+          preExpandHex={historyPanelPreExpand}
           onSelect={handleSelect}
           onSelectSession={handleSelectSession}
-          onClose={() => setShowHistoryPanel(false)}
+          onClose={() => { setShowHistoryPanel(false); setHistoryPanelPreExpand(null) }}
           receiverLat={RECEIVER_LAT}
           receiverLon={RECEIVER_LON}
         />

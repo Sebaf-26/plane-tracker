@@ -485,10 +485,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/api/trail/{hex_code}")
 def trail(hex_code: str):
     con = get_db()
-    rows = con.execute(
-        "SELECT ts, lat, lon, track FROM positions WHERE hex = ? AND lat IS NOT NULL ORDER BY ts ASC",
-        (hex_code.lower(),)
-    ).fetchall()
+    # Prende gli ultimi 3000 punti per evitare crash con storici HEMS da 7gg
+    rows = con.execute("""
+        SELECT ts, lat, lon, track FROM (
+            SELECT ts, lat, lon, track FROM positions
+            WHERE hex = ? AND lat IS NOT NULL
+            ORDER BY ts DESC LIMIT 3000
+        ) ORDER BY ts ASC
+    """, (hex_code.lower(),)).fetchall()
     con.close()
     return [dict(r) for r in rows]
 
