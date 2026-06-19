@@ -725,10 +725,10 @@ async def test_webhook():
     now_s = int(time.time())
 
     if row:
-        hex_code  = row["hex"]
-        flight    = row["flight"] or "PEGASO"
+        hex_code   = row["hex"]
+        flight     = row["flight"] or "PEGASO"
         session_id = row["session_id"] or "test000"
-        aircraft = {
+        aircraft   = {
             "lat":      row["lat"],
             "lon":      row["lon"],
             "alt_baro": row["alt_baro"],
@@ -736,6 +736,46 @@ async def test_webhook():
             "track":    row["track"],
             "squawk":   row["squawk"],
         }
+        # Se non abbiamo ancora la foto in cache, fetchala ora
+        con2 = get_db()
+        cached = con2.execute(
+            "SELECT url_photo FROM aircraft_info WHERE hex = ?", (hex_code.lower(),)
+        ).fetchone()
+        con2.close()
+        if not cached or not cached["url_photo"]:
+            try:
+                async with httpx.AsyncClient(timeout=8) as client:
+                    r = await client.get(
+                        f"https://api.adsbdb.com/v0/aircraft/{hex_code.lower()}",
+                        headers={"User-Agent": "HydraPlanes/1.0"}
+                    )
+                if r.status_code == 200:
+                    data = r.json().get("response", {}).get("aircraft") or {}
+                    now_s2 = int(time.time())
+                    info = {
+                        "hex": hex_code.lower(),
+                        "registration": data.get("registration"),
+                        "type": data.get("type"),
+                        "icao_type": data.get("icao_type"),
+                        "manufacturer": data.get("manufacturer"),
+                        "owner": data.get("registered_owner"),
+                        "country": data.get("registered_owner_country_name"),
+                        "url_photo": data.get("url_photo"),
+                        "url_photo_thumb": data.get("url_photo_thumbnail"),
+                        "fetched_at": now_s2,
+                    }
+                    con3 = get_db()
+                    con3.execute("""
+                        INSERT OR REPLACE INTO aircraft_info
+                        (hex, registration, type, icao_type, manufacturer, owner, country,
+                         url_photo, url_photo_thumb, fetched_at)
+                        VALUES (:hex,:registration,:type,:icao_type,:manufacturer,:owner,
+                                :country,:url_photo,:url_photo_thumb,:fetched_at)
+                    """, info)
+                    con3.commit()
+                    con3.close()
+            except Exception:
+                pass
     else:
         # Nessun PEGASO nel DB: usa dati sintetici
         hex_code   = "abc123"
