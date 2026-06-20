@@ -368,6 +368,7 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
 _db = None
 _current_session = {}
 _last_ts = {}
+_known_flight = {}  # hex -> ultimo flight_str non-None visto
 
 async def poller():
     global _db
@@ -392,12 +393,26 @@ async def poller():
 
                         last = _last_ts.get(hex_code)
                         is_new_session = last is None or now_s - last > GAP_S
+                        # Callsign appare per la prima volta su hex già tracciato
+                        flight_just_appeared = (
+                            flight_str and
+                            not is_new_session and
+                            _known_flight.get(hex_code) is None and
+                            is_special(flight_str)
+                        )
+                        if flight_str:
+                            _known_flight[hex_code] = flight_str
                         if is_new_session:
+                            _known_flight[hex_code] = flight_str
                             new_sid = make_session_id(hex_code, now_s)
                             _current_session[hex_code] = new_sid
                             if is_special(flight_str):
                                 print(f"[poller] SPECIALE rilevato: {flight_str} ({hex_code}), nuova sessione {new_sid}", flush=True)
                                 new_sessions.append((hex_code, flight_str, new_sid, a))
+                        elif flight_just_appeared:
+                            sid = _current_session.get(hex_code, make_session_id(hex_code, now_s))
+                            print(f"[poller] SPECIALE callsign apparso: {flight_str} ({hex_code}), sessione {sid}", flush=True)
+                            new_sessions.append((hex_code, flight_str, sid, a))
                         _last_ts[hex_code] = now_s
                         sid = _current_session[hex_code]
 

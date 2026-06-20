@@ -613,11 +613,9 @@ export default function App() {
       setShowHistoryPanel(true)
       return
     }
-    setSelectedHex((prev) => {
-      if (prev === hex) { setMobileDetailOpen(false); return null }
-      if (isPortrait) setMobileDetailOpen(false) // reset, mini card si apre da sola
-      return hex
-    })
+    const deselecting = selectedHex === hex
+    setMobileDetailOpen(false)
+    setSelectedHex(deselecting ? null : hex)
     setSelectedSession(prev => (prev && prev.hex !== hex) ? null : prev)
     if (!selectedSession || selectedSession.hex !== hex) setSessionTrail([])
   }
