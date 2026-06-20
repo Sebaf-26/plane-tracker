@@ -518,6 +518,7 @@ export default function App() {
   const [showHistorical, setShowHistorical] = useState(false)
   const [histSliderHours, setHistSliderHours] = useState(0) // 0 = ora, 24 = 24h fa
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 900
   // portrait = schermo stretto E più alto che largo
   const isPortrait = typeof window !== 'undefined' && window.innerWidth < window.innerHeight && window.innerWidth < 600
@@ -612,7 +613,11 @@ export default function App() {
       setShowHistoryPanel(true)
       return
     }
-    setSelectedHex((prev) => (prev === hex ? null : hex))
+    setSelectedHex((prev) => {
+      if (prev === hex) { setMobileDetailOpen(false); return null }
+      if (isPortrait) setMobileDetailOpen(false) // reset, mini card si apre da sola
+      return hex
+    })
     setSelectedSession(prev => (prev && prev.hex !== hex) ? null : prev)
     if (!selectedSession || selectedSession.hex !== hex) setSessionTrail([])
   }
@@ -700,6 +705,20 @@ export default function App() {
               <span style={{ fontFamily: 'var(--font)', fontWeight: 600, fontSize: 10, opacity: 0.7 }}>✕ esci</span>
             </button>
           )}
+
+          {/* Hamburger menu — solo portrait, nella colonna top-right */}
+          {isPortrait && (
+            <button
+              onClick={() => setSidebarOpen(v => !v)}
+              style={{
+                width: 38, height: 38, borderRadius: 10,
+                background: 'rgba(20,20,30,0.88)', border: '1.5px solid rgba(255,255,255,0.15)',
+                color: 'white', fontSize: 18, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                backdropFilter: 'blur(8px)',
+              }}
+            >☰</button>
+          )}
         </div>
 
         {/* Slider temporale storico */}
@@ -740,19 +759,66 @@ export default function App() {
           />
         )}
 
-        {isPortrait && (
-          <button
-            onClick={() => setSidebarOpen(v => !v)}
+        {/* Mobile portrait: mini card + full sheet */}
+        {isPortrait && selectedPlane && !mobileDetailOpen && (
+          <div
+            onClick={() => setMobileDetailOpen(true)}
             style={{
-              position: 'absolute', top: 16, left: 16, zIndex: 1100,
-              width: 44, height: 44, borderRadius: 12,
-              background: 'rgba(20,20,30,0.88)', border: '1.5px solid rgba(255,255,255,0.15)',
-              color: 'white', fontSize: 20, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              backdropFilter: 'blur(8px)',
+              position: 'absolute', bottom: 24, left: 16, right: 16, zIndex: 1100,
+              background: 'rgba(18,18,28,0.95)', backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16,
+              padding: '12px 16px', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
             }}
-          >☰</button>
+          >
+            <div style={{ fontWeight: 800, fontSize: 15, letterSpacing: -0.3 }}>
+              {selectedPlane.flight?.trim() || selectedPlane.hex.toUpperCase()}
+            </div>
+            <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--text2)' }}>
+              {selectedPlane.alt_baro != null && selectedPlane.alt_baro !== 'ground' && (
+                <span><span style={{ color: 'var(--text3)', fontSize: 10 }}>ALT </span>{Number(selectedPlane.alt_baro).toLocaleString()} ft</span>
+              )}
+              {selectedPlane.gs != null && (
+                <span><span style={{ color: 'var(--text3)', fontSize: 10 }}>GS </span>{Math.round(selectedPlane.gs)} kt</span>
+              )}
+              {selectedPlane.track != null && (
+                <span><span style={{ color: 'var(--text3)', fontSize: 10 }}>HDG </span>{Math.round(selectedPlane.track)}°</span>
+              )}
+              {selectedPlane.squawk && (
+                <span><span style={{ color: 'var(--text3)', fontSize: 10 }}>SQK </span>{selectedPlane.squawk}</span>
+              )}
+            </div>
+            <span style={{ color: 'var(--text3)', fontSize: 16 }}>›</span>
+          </div>
         )}
+
+        {/* Full detail sheet da sotto */}
+        {isPortrait && mobileDetailOpen && selectedPlane && (
+          <>
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 2100, background: 'rgba(0,0,0,0.5)' }}
+              onClick={() => setMobileDetailOpen(false)}
+            />
+            <div style={{
+              position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2101,
+              maxHeight: '85vh', overflowY: 'auto',
+              background: '#0d1117',
+              borderRadius: '20px 20px 0 0',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 -8px 40px rgba(0,0,0,0.8)',
+              padding: '8px 16px 32px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0 12px' }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
+              </div>
+              <FullDetail
+                plane={selectedPlane}
+                onClose={() => { setMobileDetailOpen(false); setSelectedHex(null); setSelectedSession(null); setSessionTrail([]) }}
+              />
+            </div>
+          </>
+        )}
+
       </div>
 
       {isPortrait && sidebarOpen && (
@@ -816,7 +882,7 @@ export default function App() {
           </div>
         </div>
 
-        {selectedPlane && (
+        {selectedPlane && !isPortrait && (
           <FullDetail plane={selectedPlane} onClose={() => { setSelectedHex(null); setSelectedSession(null); setSessionTrail([]) }} />
         )}
 
