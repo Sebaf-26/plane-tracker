@@ -515,7 +515,7 @@ export default function App() {
   const [selectedSession, setSelectedSession] = useState(null)  // { id, hex } | null
   const [sessionTrail, setSessionTrail] = useState([])
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
-  const [showHistorical, setShowHistorical] = useState(true)
+  const [showHistorical, setShowHistorical] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 900
   const { getTrail } = useTrails(planes, selectedHex)
