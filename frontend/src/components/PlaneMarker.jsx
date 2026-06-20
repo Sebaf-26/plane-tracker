@@ -48,6 +48,7 @@ function makeIcon(plane, selected, historical) {
 }
 
 export default function PlaneMarker({ plane, selected, onClick, historical }) {
+  if (plane.lat == null || plane.lon == null || !isFinite(plane.lat) || !isFinite(plane.lon)) return null
   const callsign = plane.flight?.trim() || plane.hex.toUpperCase()
   const icon = makeIcon(plane, selected, historical)
   const special = getSpecial(plane.flight)

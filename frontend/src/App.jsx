@@ -22,7 +22,7 @@ function FlyTo({ plane }) {
   const map = useMap()
   const prev = useRef(null)
   useEffect(() => {
-    if (plane && plane.hex !== prev.current) {
+    if (plane && plane.hex !== prev.current && plane.lat != null && plane.lon != null) {
       map.flyTo([plane.lat, plane.lon], Math.max(map.getZoom(), 9), { duration: 0.6 })
       prev.current = plane.hex
     }
