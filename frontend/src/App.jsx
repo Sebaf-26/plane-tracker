@@ -573,8 +573,9 @@ export default function App() {
   const histWindowEnd = nowS - histSliderHours * 3600
   const histWindowStart = histWindowEnd - 2 * 3600
   const historicalPlanes = known
-    .filter((k) => !liveHexSet.has(k.hex) && k.last_lat != null && k.last_lon != null
-      && k.last_seen >= histWindowStart && k.last_seen <= histWindowEnd)
+    .filter((k) => !liveHexSet.has(k.hex) && k.last_lat != null && k.last_lon != null)
+  const historicalPlanesFiltered = historicalPlanes
+    .filter((p) => p.last_seen >= histWindowStart && p.last_seen <= histWindowEnd)
     .map((k) => ({
       hex: k.hex,
       flight: k.flight,
@@ -655,7 +656,7 @@ export default function App() {
               {planes.filter(p => p.lat != null && p.lon != null && isFinite(p.lat) && isFinite(p.lon)).map((p) => (
                 <PlaneMarker key={p.hex} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} />
               ))}
-              {showHistorical && historicalPlanes.filter(p => p.lat != null && p.lon != null && isFinite(p.lat) && isFinite(p.lon)).map((p) => (
+              {showHistorical && historicalPlanesFiltered.filter(p => p.lat != null && p.lon != null && isFinite(p.lat) && isFinite(p.lon)).map((p) => (
                 <PlaneMarker key={`h-${p.hex}`} plane={p} selected={p.hex === selectedHex} onClick={handleSelect} historical={true} />
               ))}
             </>
