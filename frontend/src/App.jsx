@@ -732,7 +732,7 @@ export default function App() {
           </div>
         )}
 
-        {!isPortrait && (
+        {!isMobile && (
           <BottomPanel
             plane={selectedPlane}
             sessionId={selectedSession?.id}
@@ -769,6 +769,12 @@ export default function App() {
         boxShadow: '-8px 0 40px rgba(0,0,0,0.7)',
         transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
         transition: 'transform 0.3s ease',
+      } : isMobile ? {
+        // landscape mobile: sidebar fissa a destra come desktop ma più stretta
+        width: 280, display: 'flex', flexDirection: 'column',
+        gap: 12, padding: 12, overflowY: 'scroll',
+        flexShrink: 0, background: 'transparent',
+        height: '100vh',
       } : {
         width: 340, display: 'flex', flexDirection: 'column',
         gap: 12, padding: 16, overflowY: 'scroll',
