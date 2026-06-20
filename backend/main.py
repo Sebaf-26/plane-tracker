@@ -270,14 +270,13 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
                     con.close()
                     return
 
-        # Cooldown
-        cooldown_s = cfg["cooldown_min"] * 60
+        # Cooldown per sessione (non per hex — ogni nuovo volo deve notificare)
         already = con.execute(
-            "SELECT sent_at FROM webhook_sent WHERE hex = ? AND sent_at > ?",
-            (hex_code, now_s - cooldown_s)
+            "SELECT sent_at FROM webhook_sent WHERE session_id = ?",
+            (session_id,)
         ).fetchone()
         if already:
-            print(f"[webhook] SKIP {flight}: cooldown attivo (hex={hex_code})", flush=True)
+            print(f"[webhook] SKIP {flight}: già notificato per sessione {session_id}", flush=True)
             con.close()
             return
 
