@@ -658,22 +658,47 @@ export default function App() {
           <FlyTo plane={selectedPlane} />
         </MapContainer>
 
-        {/* Toggle storico */}
-        <button
-          onClick={() => setShowHistorical(v => !v)}
-          style={{
-            position: 'absolute', top: isMobile ? 60 : 16, right: 16, zIndex: 1100,
-            padding: '7px 13px', borderRadius: 20,
-            background: showHistorical ? 'rgba(250,193,35,0.18)' : 'rgba(30,30,40,0.85)',
-            border: `1.5px solid ${showHistorical ? 'rgba(250,193,35,0.5)' : 'rgba(255,255,255,0.15)'}`,
-            color: showHistorical ? 'var(--accent)' : 'var(--text3)',
-            fontSize: 12, fontWeight: 600, cursor: 'pointer',
-            fontFamily: 'var(--font)',
-            backdropFilter: 'blur(8px)',
-          }}
-        >
-          🕓 Storico {showHistorical ? 'ON' : 'OFF'}
-        </button>
+        {/* Controlli mappa — colonna top-right */}
+        <div style={{
+          position: 'absolute', top: 16, right: 16, zIndex: 1100,
+          display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
+        }}>
+          {/* Toggle storico */}
+          <button
+            onClick={() => setShowHistorical(v => !v)}
+            style={{
+              padding: '7px 13px', borderRadius: 20,
+              background: showHistorical ? 'rgba(250,193,35,0.18)' : 'rgba(30,30,40,0.85)',
+              border: `1.5px solid ${showHistorical ? 'rgba(250,193,35,0.5)' : 'rgba(255,255,255,0.15)'}`,
+              color: showHistorical ? 'var(--accent)' : 'var(--text3)',
+              fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              fontFamily: 'var(--font)', backdropFilter: 'blur(8px)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            🕓 Storico {showHistorical ? 'ON' : 'OFF'}
+          </button>
+
+          {/* Badge sessione attiva */}
+          {selectedSession && (
+            <button
+              onClick={() => { setSelectedSession(null); setSessionTrail([]); setSelectedHex(null); history.pushState('', document.title, window.location.pathname) }}
+              style={{
+                padding: '6px 13px', borderRadius: 14,
+                background: 'rgba(250,193,35,0.15)',
+                border: '1.5px solid rgba(250,193,35,0.4)',
+                fontSize: 11, fontWeight: 700, color: 'var(--accent)',
+                fontFamily: 'var(--font-mono)', backdropFilter: 'blur(8px)',
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <span style={{ fontFamily: 'var(--font)', fontWeight: 400, opacity: 0.7, fontSize: 10 }}>sessione</span>
+              {selectedSession.id}
+              <span style={{ fontFamily: 'var(--font)', fontWeight: 600, fontSize: 10, opacity: 0.7 }}>✕ esci</span>
+            </button>
+          )}
+        </div>
 
         {/* Slider temporale storico */}
         {showHistorical && (
@@ -692,9 +717,7 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
               <span>ora</span>
               <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
-                {histSliderHours === 0
-                  ? 'ultimi 2h'
-                  : `da -${histSliderHours + 2}h a -${histSliderHours}h`}
+                {histSliderHours === 0 ? 'ultimi 2h' : `da -${histSliderHours + 2}h a -${histSliderHours}h`}
               </span>
               <span>-24h</span>
             </div>
@@ -705,28 +728,6 @@ export default function App() {
               style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer', height: 28 }}
             />
           </div>
-        )}
-
-        {/* Badge sessione attiva + bottone esci dal focus */}
-        {selectedSession && (
-          <button
-            onClick={() => { setSelectedSession(null); setSessionTrail([]); setSelectedHex(null); history.pushState('', document.title, window.location.pathname) }}
-            style={{
-              position: 'absolute', top: 56, right: 16, zIndex: 1100,
-              padding: '6px 13px', borderRadius: 14,
-              background: 'rgba(250,193,35,0.15)',
-              border: '1.5px solid rgba(250,193,35,0.4)',
-              fontSize: 11, fontWeight: 700, color: 'var(--accent)',
-              fontFamily: 'var(--font-mono)',
-              backdropFilter: 'blur(8px)',
-              display: 'flex', alignItems: 'center', gap: 8,
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ fontFamily: 'var(--font)', fontWeight: 400, opacity: 0.7, fontSize: 10 }}>sessione</span>
-            {selectedSession.id}
-            <span style={{ fontFamily: 'var(--font)', fontWeight: 600, fontSize: 10, opacity: 0.7 }}>✕ esci</span>
-          </button>
         )}
 
         <BottomPanel
