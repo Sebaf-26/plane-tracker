@@ -280,6 +280,18 @@ async def fire_webhook(hex_code, flight, session_id, aircraft, now_s, is_test=Fa
             con.close()
             return
 
+    # Merge con ultima posizione DB: copre i campi mancanti quando il webhook
+    # scatta su flight_just_appeared e l'aereo non ha ancora inviato tutto
+    db_pos = con.execute(
+        """SELECT lat, lon, alt_baro, gs, track, squawk
+           FROM positions WHERE hex = ? ORDER BY ts DESC LIMIT 1""",
+        (hex_code.lower(),)
+    ).fetchone()
+    if db_pos:
+        merged = dict(db_pos)
+        merged.update({k: v for k, v in aircraft.items() if v is not None})
+        aircraft = merged
+
     # Build payload
     payload = {
         "evento": "aereo_speciale_rilevato",

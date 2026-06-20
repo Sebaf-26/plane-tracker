@@ -18,7 +18,7 @@ export function usePlanes() {
         const data = await res.json()
         if (!active) return
         const visible = (data.aircraft || []).filter(
-          (a) => a.lat != null && a.lon != null
+          (a) => a.lat != null && a.lon != null && isFinite(a.lat) && isFinite(a.lon)
         )
         setPlanes(visible)
         setLastUpdate(new Date())
