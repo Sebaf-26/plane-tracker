@@ -519,6 +519,8 @@ export default function App() {
   const [histSliderHours, setHistSliderHours] = useState(0) // 0 = ora, 24 = 24h fa
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 900
+  // portrait = schermo stretto E più alto che largo
+  const isPortrait = typeof window !== 'undefined' && window.innerWidth < window.innerHeight && window.innerWidth < 600
   const { getTrail } = useTrails(planes, selectedHex)
   const [dbStats, setDbStats] = useState(null)
   const [showWebhookSettings, setShowWebhookSettings] = useState(false)
@@ -621,7 +623,7 @@ export default function App() {
   const trailPoints = selectedSession ? sessionTrail : (selectedPlane ? getTrail(selectedPlane.hex) : [])
 
   return (
-    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'row', height: '100vh', overflow: 'hidden' }}>
 
       {/* Map */}
       <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
@@ -730,40 +732,42 @@ export default function App() {
           </div>
         )}
 
-        <BottomPanel
-          plane={selectedPlane}
-          sessionId={selectedSession?.id}
-          onClose={() => { setSelectedHex(null); setSelectedSession(null); setSessionTrail([]) }}
-        />
+        {!isPortrait && (
+          <BottomPanel
+            plane={selectedPlane}
+            sessionId={selectedSession?.id}
+            onClose={() => { setSelectedHex(null); setSelectedSession(null); setSessionTrail([]) }}
+          />
+        )}
 
-        {isMobile && (
+        {isPortrait && (
           <button
             onClick={() => setSidebarOpen(v => !v)}
             style={{
-              position: 'absolute', bottom: selectedPlane ? 220 : 16, right: 16, zIndex: 1100,
-              width: 52, height: 52, borderRadius: '50%',
-              background: '#111827', border: '1.5px solid rgba(255,255,255,0.15)',
-              color: 'white', fontSize: 22, cursor: 'pointer',
+              position: 'absolute', top: 16, left: 16, zIndex: 1100,
+              width: 44, height: 44, borderRadius: 12,
+              background: 'rgba(20,20,30,0.88)', border: '1.5px solid rgba(255,255,255,0.15)',
+              color: 'white', fontSize: 20, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+              backdropFilter: 'blur(8px)',
             }}
           >☰</button>
         )}
       </div>
 
-      {(!isMobile || sidebarOpen) && isMobile && (
+      {isPortrait && sidebarOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.5)' }}
           onClick={() => setSidebarOpen(false)} />
       )}
-      <aside style={isMobile ? {
-        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 2001,
-        maxHeight: '75vh', display: 'flex', flexDirection: 'column',
+      <aside style={isPortrait ? {
+        position: 'fixed', top: 0, right: 0, bottom: 0, zIndex: 2001,
+        width: '82vw', maxWidth: 340,
+        display: 'flex', flexDirection: 'column',
         gap: 12, padding: 16, overflowY: 'auto',
         background: '#0d1117',
-        borderRadius: '20px 20px 0 0',
-        border: '1px solid rgba(255,255,255,0.1)',
-        boxShadow: '0 -8px 40px rgba(0,0,0,0.7)',
-        transform: sidebarOpen ? 'translateY(0)' : 'translateY(100%)',
+        borderLeft: '1px solid rgba(255,255,255,0.1)',
+        boxShadow: '-8px 0 40px rgba(0,0,0,0.7)',
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
         transition: 'transform 0.3s ease',
       } : {
         width: 340, display: 'flex', flexDirection: 'column',
@@ -772,9 +776,12 @@ export default function App() {
         height: '100vh',
       }}>
 
-        {isMobile && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4, marginTop: -4 }}>
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)' }} />
+        {isPortrait && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+            <button onClick={() => setSidebarOpen(false)} style={{
+              background: 'none', border: 'none', color: 'var(--text3)',
+              fontSize: 22, cursor: 'pointer', padding: 4,
+            }}>✕</button>
           </div>
         )}
 
