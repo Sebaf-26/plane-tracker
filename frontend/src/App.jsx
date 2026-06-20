@@ -662,7 +662,7 @@ export default function App() {
         <button
           onClick={() => setShowHistorical(v => !v)}
           style={{
-            position: 'absolute', top: 16, right: 16, zIndex: 1100,
+            position: 'absolute', top: isMobile ? 60 : 16, right: 16, zIndex: 1100,
             padding: '7px 13px', borderRadius: 20,
             background: showHistorical ? 'rgba(250,193,35,0.18)' : 'rgba(30,30,40,0.85)',
             border: `1.5px solid ${showHistorical ? 'rgba(250,193,35,0.5)' : 'rgba(255,255,255,0.15)'}`,
@@ -678,13 +678,19 @@ export default function App() {
         {/* Slider temporale storico */}
         {showHistorical && (
           <div style={{
-            position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+            position: 'absolute',
+            bottom: isMobile ? 80 : 32,
+            left: isMobile ? 12 : '50%',
+            right: isMobile ? 12 : 'auto',
+            transform: isMobile ? 'none' : 'translateX(-50%)',
             zIndex: 1100, background: 'rgba(20,20,30,0.92)', backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16,
-            padding: '10px 20px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 6,
+            padding: '10px 16px',
+            width: isMobile ? 'auto' : 340,
+            display: 'flex', flexDirection: 'column', gap: 6,
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
-              <span>{histSliderHours === 0 ? 'ora' : `-${histSliderHours}h`}</span>
+              <span>ora</span>
               <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
                 {histSliderHours === 0
                   ? 'ultimi 2h'
@@ -696,7 +702,7 @@ export default function App() {
               type="range" min={0} max={22} step={1}
               value={histSliderHours}
               onChange={e => setHistSliderHours(Number(e.target.value))}
-              style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
+              style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer', height: 28 }}
             />
           </div>
         )}
