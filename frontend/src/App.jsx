@@ -516,6 +516,7 @@ export default function App() {
   const [sessionTrail, setSessionTrail] = useState([])
   const [showHistoryPanel, setShowHistoryPanel] = useState(false)
   const [showHistorical, setShowHistorical] = useState(false)
+  const [histSliderHours, setHistSliderHours] = useState(0) // 0 = ora, 24 = 24h fa
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 900
   const { getTrail } = useTrails(planes, selectedHex)
@@ -565,8 +566,12 @@ export default function App() {
   }
 
   const liveHexSet = new Set(planes.map((p) => p.hex))
+  const nowS = Math.floor(Date.now() / 1000)
+  const histWindowEnd = nowS - histSliderHours * 3600
+  const histWindowStart = histWindowEnd - 2 * 3600
   const historicalPlanes = known
-    .filter((k) => !liveHexSet.has(k.hex) && k.last_lat != null && k.last_lon != null)
+    .filter((k) => !liveHexSet.has(k.hex) && k.last_lat != null && k.last_lon != null
+      && k.last_seen >= histWindowStart && k.last_seen <= histWindowEnd)
     .map((k) => ({
       hex: k.hex,
       flight: k.flight,
@@ -669,6 +674,32 @@ export default function App() {
         >
           🕓 Storico {showHistorical ? 'ON' : 'OFF'}
         </button>
+
+        {/* Slider temporale storico */}
+        {showHistorical && (
+          <div style={{
+            position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+            zIndex: 1100, background: 'rgba(20,20,30,0.92)', backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.12)', borderRadius: 16,
+            padding: '10px 20px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 6,
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text3)', fontFamily: 'var(--font-mono)' }}>
+              <span>{histSliderHours === 0 ? 'ora' : `-${histSliderHours}h`}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 700 }}>
+                {histSliderHours === 0
+                  ? 'ultimi 2h'
+                  : `da -${histSliderHours + 2}h a -${histSliderHours}h`}
+              </span>
+              <span>-24h</span>
+            </div>
+            <input
+              type="range" min={0} max={22} step={1}
+              value={histSliderHours}
+              onChange={e => setHistSliderHours(Number(e.target.value))}
+              style={{ width: '100%', accentColor: 'var(--accent)', cursor: 'pointer' }}
+            />
+          </div>
+        )}
 
         {/* Badge sessione attiva + bottone esci dal focus */}
         {selectedSession && (
