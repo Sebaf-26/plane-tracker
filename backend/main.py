@@ -531,12 +531,15 @@ def trail(hex_code: str):
 @app.get("/api/history/{hex_code}")
 def history(hex_code: str):
     con = get_db()
+    # Limite a 3000 punti più recenti per evitare crash con storici HEMS da 7gg
     rows = con.execute("""
         SELECT ts, flight, lat, lon, alt_baro, alt_geom, gs, ias, tas, mach,
                track, mag_heading, true_heading, baro_rate, geom_rate, squawk, emergency,
                category, nav_alt_mcp, nav_alt_fms, nav_heading, roll, rssi, messages,
                wind_speed, wind_dir, oat, tat
-        FROM positions WHERE hex = ? ORDER BY ts ASC
+        FROM (
+            SELECT * FROM positions WHERE hex = ? ORDER BY ts DESC LIMIT 3000
+        ) ORDER BY ts ASC
     """, (hex_code.lower(),)).fetchall()
     con.close()
     return [dict(r) for r in rows]
