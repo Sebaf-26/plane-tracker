@@ -5,8 +5,6 @@ import {
 } from 'recharts'
 import { SESSION_COLORS, GAP_S } from '../sessions'
 
-const MAX_REF_LINES = 8
-
 function fmt(ts) {
   return new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
@@ -35,31 +33,41 @@ function toNum(v) {
   return isFinite(n) ? n : null
 }
 
-function buildChartData(rows, limitPoints) {
-  console.log(`[HistoryChart] buildChartData: ${rows.length} righe grezze, limitPoints=${limitPoints}`)
-  const limited = limitPoints ? rows.slice(-800) : rows
+// currentOnly=true → per aerei live: prende solo l'ultima sessione (dopo l'ultimo gap)
+function buildChartData(rows, currentOnly) {
+  let working = rows
+
+  if (currentOnly && rows.length > 1) {
+    // Trova l'ultimo gap — tutto ciò che viene dopo è la sessione corrente
+    let lastGapIdx = 0
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i].ts - rows[i - 1].ts > GAP_S) {
+        lastGapIdx = i
+      }
+    }
+    if (lastGapIdx > 0) {
+      working = rows.slice(lastGapIdx)
+      console.log(`[HistoryChart] live: sessione corrente = ultimi ${working.length} punti (su ${rows.length} totali)`)
+    } else {
+      console.log(`[HistoryChart] live: nessun gap trovato, uso tutti i ${rows.length} punti`)
+    }
+  }
+
   const seen = new Set()
   const clean = []
   let prevTs = null
-  const gapTimes = []
-  let sessionIdx = 0
-  let skipped = 0
 
-  for (const r of limited) {
-    if (seen.has(r.ts)) { skipped++; continue }
+  for (const r of working) {
+    if (seen.has(r.ts)) continue
     seen.add(r.ts)
 
     const alt  = toNum(r.alt_baro)
     const gs   = toNum(r.gs)
     const rate = toNum(r.baro_rate)
 
+    // Anche nella sessione singola possono esserci micro-gap
     if (prevTs != null && r.ts - prevTs > GAP_S) {
-      // gap entry: tutti i valori esplicitamente null per evitare crash Recharts
-      clean.push({
-        ts: r.ts, time: fmt(r.ts), _gap: true, sessionIdx: ++sessionIdx,
-        alt_ft: null, alt_m: null, gs_kt: null, gs_kmh: null, baro_rate: null,
-      })
-      gapTimes.push(fmt(r.ts))
+      clean.push({ ts: r.ts, time: fmt(r.ts), _gap: true, alt_ft: null, alt_m: null, gs_kt: null, gs_kmh: null, baro_rate: null })
     }
 
     clean.push({
@@ -70,22 +78,20 @@ function buildChartData(rows, limitPoints) {
       gs_kt:     gs   != null ? Math.round(gs)   : null,
       gs_kmh:    gs   != null ? Math.round(gs * 1.852) : null,
       baro_rate: rate != null ? Math.round(rate) : null,
-      sessionIdx,
     })
     prevTs = r.ts
   }
 
-  console.log(`[HistoryChart] buildChartData OK: ${clean.length} punti, ${skipped} dup, ${gapTimes.length} gap/sessioni`)
-  if (clean.length > 0) {
-    const sample = clean.find(p => !p._gap)
-    console.log('[HistoryChart] campione:', sample)
-  }
-  return { points: clean, gapTimes }
+  console.log(`[HistoryChart] buildChartData: ${clean.length} punti pronti per Recharts`)
+  return clean
 }
 
 export default function HistoryChart({ hex, sessionId }) {
-  const [data, setData] = useState({ points: [], gapTimes: [] })
+  const [points, setPoints] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // currentOnly=true quando è un aereo live senza sessionId specifico
+  const currentOnly = !sessionId
 
   useEffect(() => {
     const key = sessionId ?? hex
@@ -94,20 +100,19 @@ export default function HistoryChart({ hex, sessionId }) {
     const url = sessionId
       ? `/api/session/${sessionId}/history`
       : `/api/history/${hex}`
-    console.log(`[HistoryChart] fetch → ${url}`)
+    console.log(`[HistoryChart] fetch → ${url} (currentOnly=${currentOnly})`)
     fetch(url)
       .then((r) => {
-        console.log(`[HistoryChart] HTTP ${r.status} da ${url}`)
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
       .then((rows) => {
-        console.log(`[HistoryChart] ricevute ${rows.length} righe, prima:`, rows[0])
-        setData(buildChartData(rows, !sessionId))
+        console.log(`[HistoryChart] ricevute ${rows.length} righe grezze`)
+        setPoints(buildChartData(rows, currentOnly))
       })
       .catch((err) => {
-        console.error(`[HistoryChart] ERRORE:`, err)
-        setData({ points: [], gapTimes: [] })
+        console.error(`[HistoryChart] errore:`, err)
+        setPoints([])
       })
       .finally(() => setLoading(false))
   }, [hex, sessionId])
@@ -118,40 +123,17 @@ export default function HistoryChart({ hex, sessionId }) {
     </div>
   )
 
-  if (!data.points.length) return (
+  if (!points.length) return (
     <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text3)', fontSize: 13 }}>
       Nessun dato storico disponibile.
     </div>
   )
-
-  const { points, gapTimes } = data
-  const totalSessions = gapTimes.length + 1
-  // Limita le reference lines per evitare crash con HEMS a molte sessioni
-  const visibleGaps = gapTimes.slice(-MAX_REF_LINES)
-  const hiddenCount = gapTimes.length - visibleGaps.length
-
-  console.log(`[HistoryChart] render: ${points.length} punti, ${totalSessions} sessioni, ${visibleGaps.length} ref lines mostrate`)
-
-  const refLines = visibleGaps.map((t, i) => {
-    const colorIdx = (hiddenCount + i + 1) % SESSION_COLORS.length
-    return (
-      <ReferenceLine key={t} x={t} stroke={SESSION_COLORS[colorIdx]}
-        strokeWidth={1.5} strokeDasharray="4 3"
-        label={{ value: `#${hiddenCount + i + 2}`, position: 'insideTopRight', fontSize: 9, fill: SESSION_COLORS[colorIdx] }}
-      />
-    )
-  })
 
   return (
     <div style={{ marginTop: 16 }}>
       {sessionId && (
         <div style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>
           SESSIONE · {sessionId.toUpperCase()}
-        </div>
-      )}
-      {totalSessions > 1 && (
-        <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 8 }}>
-          {totalSessions} missioni nel grafico{hiddenCount > 0 ? ` (mostrate ultime ${MAX_REF_LINES + 1})` : ''}
         </div>
       )}
 
@@ -171,7 +153,6 @@ export default function HistoryChart({ hex, sessionId }) {
           <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(v) => v != null ? `${(v/1000).toFixed(0)}k` : ''} />
           <Tooltip content={<CustomTooltip />} />
           <Area type="monotone" dataKey="alt_ft" name="Alt ft" stroke="#fac123" strokeWidth={1.5} fill="url(#altGrad)" dot={false} connectNulls={false} />
-          {refLines}
         </ComposedChart>
       </ResponsiveContainer>
 
@@ -193,7 +174,6 @@ export default function HistoryChart({ hex, sessionId }) {
           <Tooltip content={<CustomTooltip />} />
           <Area yAxisId="gs" type="monotone" dataKey="gs_kt" name="GS kt" stroke="#64d2ff" strokeWidth={1.5} fill="url(#gsGrad)" dot={false} connectNulls={false} />
           <Line yAxisId="rate" type="monotone" dataKey="baro_rate" name="Rateo ft/min" stroke="#30d158" strokeWidth={1} dot={false} connectNulls={false} strokeDasharray="3 2" />
-          {refLines}
         </ComposedChart>
       </ResponsiveContainer>
     </div>
