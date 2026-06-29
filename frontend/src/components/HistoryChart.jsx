@@ -3,7 +3,9 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis,
   Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts'
-import { splitSessions, SESSION_COLORS, GAP_S } from '../sessions'
+import { SESSION_COLORS, GAP_S } from '../sessions'
+
+const MAX_REF_LINES = 8
 
 function fmt(ts) {
   return new Date(ts * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
@@ -42,32 +44,41 @@ function buildChartData(rows, limitPoints) {
   const gapTimes = []
   let sessionIdx = 0
   let skipped = 0
+
   for (const r of limited) {
     if (seen.has(r.ts)) { skipped++; continue }
     seen.add(r.ts)
-    const alt = toNum(r.alt_baro)
-    const gs  = toNum(r.gs)
+
+    const alt  = toNum(r.alt_baro)
+    const gs   = toNum(r.gs)
     const rate = toNum(r.baro_rate)
+
     if (prevTs != null && r.ts - prevTs > GAP_S) {
-      clean.push({ ts: r.ts, time: fmt(r.ts), _gap: true, sessionIdx: ++sessionIdx })
+      // gap entry: tutti i valori esplicitamente null per evitare crash Recharts
+      clean.push({
+        ts: r.ts, time: fmt(r.ts), _gap: true, sessionIdx: ++sessionIdx,
+        alt_ft: null, alt_m: null, gs_kt: null, gs_kmh: null, baro_rate: null,
+      })
       gapTimes.push(fmt(r.ts))
     }
+
     clean.push({
       ts: r.ts,
       time: fmt(r.ts),
-      alt_ft:    alt != null ? Math.round(alt) : null,
-      alt_m:     alt != null ? Math.round(alt * 0.3048) : null,
-      gs_kt:     gs  != null ? Math.round(gs)  : null,
-      gs_kmh:    gs  != null ? Math.round(gs * 1.852) : null,
+      alt_ft:    alt  != null ? Math.round(alt)  : null,
+      alt_m:     alt  != null ? Math.round(alt * 0.3048) : null,
+      gs_kt:     gs   != null ? Math.round(gs)   : null,
+      gs_kmh:    gs   != null ? Math.round(gs * 1.852) : null,
       baro_rate: rate != null ? Math.round(rate) : null,
       sessionIdx,
     })
     prevTs = r.ts
   }
-  console.log(`[HistoryChart] buildChartData: ${clean.length} punti puliti, ${skipped} duplicati saltati, ${gapTimes.length} gap`)
+
+  console.log(`[HistoryChart] buildChartData OK: ${clean.length} punti, ${skipped} dup, ${gapTimes.length} gap/sessioni`)
   if (clean.length > 0) {
     const sample = clean.find(p => !p._gap)
-    console.log('[HistoryChart] campione punto:', sample)
+    console.log('[HistoryChart] campione:', sample)
   }
   return { points: clean, gapTimes }
 }
@@ -86,17 +97,16 @@ export default function HistoryChart({ hex, sessionId }) {
     console.log(`[HistoryChart] fetch → ${url}`)
     fetch(url)
       .then((r) => {
-        console.log(`[HistoryChart] risposta HTTP ${r.status} da ${url}`)
+        console.log(`[HistoryChart] HTTP ${r.status} da ${url}`)
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
       })
       .then((rows) => {
-        console.log(`[HistoryChart] ricevute ${rows.length} righe da API`)
-        if (rows.length > 0) console.log('[HistoryChart] prima riga:', rows[0])
+        console.log(`[HistoryChart] ricevute ${rows.length} righe, prima:`, rows[0])
         setData(buildChartData(rows, !sessionId))
       })
       .catch((err) => {
-        console.error(`[HistoryChart] errore fetch ${url}:`, err)
+        console.error(`[HistoryChart] ERRORE:`, err)
         setData({ points: [], gapTimes: [] })
       })
       .finally(() => setLoading(false))
@@ -115,19 +125,33 @@ export default function HistoryChart({ hex, sessionId }) {
   )
 
   const { points, gapTimes } = data
+  const totalSessions = gapTimes.length + 1
+  // Limita le reference lines per evitare crash con HEMS a molte sessioni
+  const visibleGaps = gapTimes.slice(-MAX_REF_LINES)
+  const hiddenCount = gapTimes.length - visibleGaps.length
 
-  const refLines = gapTimes.map((t, i) => (
-    <ReferenceLine key={t} x={t} stroke={SESSION_COLORS[(i + 1) % SESSION_COLORS.length]}
-      strokeWidth={1.5} strokeDasharray="4 3"
-      label={{ value: `#${i + 2}`, position: 'insideTopRight', fontSize: 9, fill: SESSION_COLORS[(i + 1) % SESSION_COLORS.length] }}
-    />
-  ))
+  console.log(`[HistoryChart] render: ${points.length} punti, ${totalSessions} sessioni, ${visibleGaps.length} ref lines mostrate`)
+
+  const refLines = visibleGaps.map((t, i) => {
+    const colorIdx = (hiddenCount + i + 1) % SESSION_COLORS.length
+    return (
+      <ReferenceLine key={t} x={t} stroke={SESSION_COLORS[colorIdx]}
+        strokeWidth={1.5} strokeDasharray="4 3"
+        label={{ value: `#${hiddenCount + i + 2}`, position: 'insideTopRight', fontSize: 9, fill: SESSION_COLORS[colorIdx] }}
+      />
+    )
+  })
 
   return (
     <div style={{ marginTop: 16 }}>
       {sessionId && (
         <div style={{ fontSize: 10, color: 'var(--accent)', letterSpacing: 0.5, marginBottom: 6, fontWeight: 600 }}>
           SESSIONE · {sessionId.toUpperCase()}
+        </div>
+      )}
+      {totalSessions > 1 && (
+        <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 8 }}>
+          {totalSessions} missioni nel grafico{hiddenCount > 0 ? ` (mostrate ultime ${MAX_REF_LINES + 1})` : ''}
         </div>
       )}
 
