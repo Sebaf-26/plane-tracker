@@ -8,10 +8,18 @@ import os
 import contextlib
 from datetime import datetime, timezone
 
+import logging
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+log = logging.getLogger("hydra")
 
 ULTRAFEEDER_URL = os.getenv("ULTRAFEEDER_URL", "http://ultrafeeder/data/aircraft.json")
 DB_PATH = os.getenv("DB_PATH", "/data/hydra.db")
@@ -420,6 +428,7 @@ async def poller():
                             _current_session[hex_code] = new_sid
                             if is_special(flight_str):
                                 print(f"[poller] SPECIALE rilevato: {flight_str} ({hex_code}), nuova sessione {new_sid}", flush=True)
+                                log.info(f"[poller] SPECIALE: {flight_str} hex={hex_code} sess={new_sid}")
                                 new_sessions.append((hex_code, flight_str, new_sid, a))
                         elif flight_just_appeared:
                             sid = _current_session.get(hex_code, make_session_id(hex_code, now_s))
@@ -516,6 +525,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/api/trail/{hex_code}")
 def trail(hex_code: str):
+    log.info(f"[API] GET /api/trail/{hex_code}")
     con = get_db()
     # Prende gli ultimi 3000 punti per evitare crash con storici HEMS da 7gg
     rows = con.execute("""
@@ -530,6 +540,7 @@ def trail(hex_code: str):
 
 @app.get("/api/history/{hex_code}")
 def history(hex_code: str):
+    log.info(f"[API] GET /api/history/{hex_code}")
     con = get_db()
     # Limite a 3000 punti più recenti per evitare crash con storici HEMS da 7gg
     rows = con.execute("""
@@ -542,7 +553,12 @@ def history(hex_code: str):
         ) ORDER BY ts ASC
     """, (hex_code.lower(),)).fetchall()
     con.close()
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    log.info(f"[API] /api/history/{hex_code} → {len(result)} punti")
+    if result:
+        sample = result[0]
+        log.debug(f"[API] primo punto: ts={sample.get('ts')} alt_baro={sample.get('alt_baro')!r} gs={sample.get('gs')!r}")
+    return result
 
 @app.get("/api/sessions/{hex_code}")
 def sessions(hex_code: str):
@@ -569,6 +585,7 @@ def session_trail(session_id: str):
 
 @app.get("/api/session/{session_id}/history")
 def session_history(session_id: str):
+    log.info(f"[API] GET /api/session/{session_id}/history")
     con = get_db()
     rows = con.execute("""
         SELECT ts, flight, lat, lon, alt_baro, alt_geom, gs, ias, tas, mach,
@@ -578,7 +595,12 @@ def session_history(session_id: str):
         FROM positions WHERE session_id = ? ORDER BY ts ASC
     """, (session_id,)).fetchall()
     con.close()
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    log.info(f"[API] /api/session/{session_id}/history → {len(result)} punti")
+    if result:
+        sample = result[0]
+        log.debug(f"[API] primo punto: ts={sample.get('ts')} alt_baro={sample.get('alt_baro')!r} gs={sample.get('gs')!r}")
+    return result
 
 @app.get("/api/session/{session_id}/info")
 def session_info(session_id: str):
@@ -596,6 +618,7 @@ def session_info(session_id: str):
 
 @app.get("/api/known")
 def known():
+    log.debug("[API] GET /api/known")
     """Restituisce l'ultima posizione nota per ogni aereo nel DB.
     Usa MAX(ts) aggregate di SQLite: quando presente, gli altri campi
     non aggregati prendono il valore dalla riga con il ts massimo."""
