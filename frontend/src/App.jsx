@@ -574,8 +574,6 @@ export default function App() {
   const histWindowStart = histWindowEnd - 2 * 3600
   const historicalPlanes = known
     .filter((k) => !liveHexSet.has(k.hex) && k.last_lat != null && k.last_lon != null)
-  const historicalPlanesFiltered = historicalPlanes
-    .filter((p) => p.last_seen >= histWindowStart && p.last_seen <= histWindowEnd)
     .map((k) => ({
       hex: k.hex,
       flight: k.flight,
@@ -589,6 +587,8 @@ export default function App() {
       last_seen: k.last_seen,
       _historical: true,
     }))
+  const historicalPlanesFiltered = historicalPlanes
+    .filter((p) => p.last_seen >= histWindowStart && p.last_seen <= histWindowEnd)
 
   useEffect(() => {
     async function fetchStats() {
@@ -605,10 +605,13 @@ export default function App() {
   const selectedPlane = planes.find((p) => p.hex === selectedHex)
     ?? historicalPlanes.find((p) => p.hex === selectedHex)
     ?? null
+  if (selectedPlane) console.log(`[App] selectedPlane: hex=${selectedPlane.hex} flight=${selectedPlane.flight} lat=${selectedPlane.lat} lon=${selectedPlane.lon} alt_baro=${selectedPlane.alt_baro}`)
 
   function handleSelect(hex) {
+    console.log(`[App] handleSelect hex=${hex}`)
     // Aereo speciale storico → apri pannello sessioni invece di caricare il trail
     const histPlane = historicalPlanes.find(p => p.hex === hex)
+    console.log(`[App] histPlane=`, histPlane ? { hex: histPlane.hex, flight: histPlane.flight, lat: histPlane.lat, lon: histPlane.lon, alt_baro: histPlane.alt_baro } : null)
     if (histPlane && getSpecial(histPlane.flight)) {
       setHistoryPanelPreExpand(hex)
       setShowHistoryPanel(true)
