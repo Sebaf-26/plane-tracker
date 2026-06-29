@@ -390,6 +390,20 @@ _current_session = {}
 _last_ts = {}
 _known_flight = {}  # hex -> ultimo flight_str non-None visto
 
+async def _delayed_fire_webhook(hex_code, flight, session_id, now_s, delay=6):
+    """Aspetta che ultrafeeder abbia inviato dati completi, poi spara il webhook."""
+    await asyncio.sleep(delay)
+    con = get_db()
+    fresh = con.execute(
+        """SELECT lat, lon, alt_baro, gs, track, squawk, baro_rate, category
+           FROM positions WHERE hex = ? ORDER BY ts DESC LIMIT 1""",
+        (hex_code.lower(),)
+    ).fetchone()
+    con.close()
+    aircraft = dict(fresh) if fresh else {}
+    log.info(f"[webhook-delay] dati freschi per {flight} ({hex_code}): alt={aircraft.get('alt_baro')!r} gs={aircraft.get('gs')!r} track={aircraft.get('track')!r}")
+    await fire_webhook(hex_code, flight, session_id, aircraft, now_s)
+
 async def poller():
     global _db
     _db = get_db()
@@ -490,8 +504,9 @@ async def poller():
                     _db.commit()
 
                     # Webhook per nuove sessioni speciali (fuori dal lock DB)
+                    # Aspetta 6s per avere dati completi da ultrafeeder
                     for (hx, fl, sid, ac) in new_sessions:
-                        asyncio.create_task(fire_webhook(hx, fl, sid, ac, now_s))
+                        asyncio.create_task(_delayed_fire_webhook(hx, fl, sid, now_s, delay=6))
 
             except Exception:
                 pass
