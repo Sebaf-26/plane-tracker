@@ -17,6 +17,7 @@ export const SPECIAL_CALLSIGNS = [
 
   // Vigili del Fuoco — VF seguito da cifra (es. VF001); VFR ecc. → esclusi
   { prefix: 'DRAGO', label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
+  { prefix: 'DRAG',  label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
   { prefix: 'DRG',   label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
   { prefix: 'VF',    label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30', digitRequired: true },
   { prefix: 'VVF',   label: 'Vigili del Fuoco',    icon: 'fire',    color: '#ff3b30' },
@@ -54,7 +55,7 @@ export const SPECIAL_CALLSIGNS = [
 export function getSpecial(flight) {
   if (!flight) return null
   const f = flight.trim().toUpperCase()
-  return SPECIAL_CALLSIGNS.find(s => {
+  const result = SPECIAL_CALLSIGNS.find(s => {
     if (!f.startsWith(s.prefix)) return false
     // Per i prefissi corti ambigui il carattere successivo deve essere una cifra
     if (s.digitRequired) {
@@ -63,6 +64,9 @@ export function getSpecial(flight) {
     }
     return true
   }) ?? null
+  if (result) console.log(`[specialCallsigns] getSpecial("${f}") → ${result.label} (${result.prefix})`)
+  else if (f.length >= 2) console.debug(`[specialCallsigns] getSpecial("${f}") → null`)
+  return result
 }
 
 // MDI SVG paths
