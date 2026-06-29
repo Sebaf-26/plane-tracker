@@ -27,16 +27,27 @@ const CustomTooltip = ({ active, payload, label }) => {
   )
 }
 
+function toNum(v) {
+  if (v == null) return null
+  const n = typeof v === 'string' ? parseFloat(v) : v
+  return isFinite(n) ? n : null
+}
+
 function buildChartData(rows, limitPoints) {
+  console.log(`[HistoryChart] buildChartData: ${rows.length} righe grezze, limitPoints=${limitPoints}`)
   const limited = limitPoints ? rows.slice(-800) : rows
   const seen = new Set()
   const clean = []
   let prevTs = null
   const gapTimes = []
   let sessionIdx = 0
+  let skipped = 0
   for (const r of limited) {
-    if (seen.has(r.ts)) continue
+    if (seen.has(r.ts)) { skipped++; continue }
     seen.add(r.ts)
+    const alt = toNum(r.alt_baro)
+    const gs  = toNum(r.gs)
+    const rate = toNum(r.baro_rate)
     if (prevTs != null && r.ts - prevTs > GAP_S) {
       clean.push({ ts: r.ts, time: fmt(r.ts), _gap: true, sessionIdx: ++sessionIdx })
       gapTimes.push(fmt(r.ts))
@@ -44,20 +55,23 @@ function buildChartData(rows, limitPoints) {
     clean.push({
       ts: r.ts,
       time: fmt(r.ts),
-      alt_ft: r.alt_baro != null ? Math.round(r.alt_baro) : null,
-      alt_m:  r.alt_baro != null ? Math.round(r.alt_baro * 0.3048) : null,
-      gs_kt:  r.gs != null ? Math.round(r.gs) : null,
-      gs_kmh: r.gs != null ? Math.round(r.gs * 1.852) : null,
-      baro_rate: r.baro_rate != null ? Math.round(r.baro_rate) : null,
+      alt_ft:    alt != null ? Math.round(alt) : null,
+      alt_m:     alt != null ? Math.round(alt * 0.3048) : null,
+      gs_kt:     gs  != null ? Math.round(gs)  : null,
+      gs_kmh:    gs  != null ? Math.round(gs * 1.852) : null,
+      baro_rate: rate != null ? Math.round(rate) : null,
       sessionIdx,
     })
     prevTs = r.ts
   }
+  console.log(`[HistoryChart] buildChartData: ${clean.length} punti puliti, ${skipped} duplicati saltati, ${gapTimes.length} gap`)
+  if (clean.length > 0) {
+    const sample = clean.find(p => !p._gap)
+    console.log('[HistoryChart] campione punto:', sample)
+  }
   return { points: clean, gapTimes }
 }
 
-// sessionId: se presente, carica da /api/session/{id}/history (dati limitati già a una sessione)
-// hex: fallback, carica da /api/history/{hex} (limita a 800 punti per sicurezza)
 export default function HistoryChart({ hex, sessionId }) {
   const [data, setData] = useState({ points: [], gapTimes: [] })
   const [loading, setLoading] = useState(true)
@@ -69,10 +83,22 @@ export default function HistoryChart({ hex, sessionId }) {
     const url = sessionId
       ? `/api/session/${sessionId}/history`
       : `/api/history/${hex}`
+    console.log(`[HistoryChart] fetch → ${url}`)
     fetch(url)
-      .then((r) => r.json())
-      .then((rows) => setData(buildChartData(rows, !sessionId)))
-      .catch(() => setData({ points: [], gapTimes: [] }))
+      .then((r) => {
+        console.log(`[HistoryChart] risposta HTTP ${r.status} da ${url}`)
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((rows) => {
+        console.log(`[HistoryChart] ricevute ${rows.length} righe da API`)
+        if (rows.length > 0) console.log('[HistoryChart] prima riga:', rows[0])
+        setData(buildChartData(rows, !sessionId))
+      })
+      .catch((err) => {
+        console.error(`[HistoryChart] errore fetch ${url}:`, err)
+        setData({ points: [], gapTimes: [] })
+      })
       .finally(() => setLoading(false))
   }, [hex, sessionId])
 
@@ -118,7 +144,7 @@ export default function HistoryChart({ hex, sessionId }) {
           </defs>
           <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis dataKey="time" tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
-          <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+          <YAxis tick={{ fill: 'rgba(255,255,255,0.3)', fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(v) => v != null ? `${(v/1000).toFixed(0)}k` : ''} />
           <Tooltip content={<CustomTooltip />} />
           <Area type="monotone" dataKey="alt_ft" name="Alt ft" stroke="#fac123" strokeWidth={1.5} fill="url(#altGrad)" dot={false} connectNulls={false} />
           {refLines}
